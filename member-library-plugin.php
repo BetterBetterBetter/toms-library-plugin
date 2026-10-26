@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: Member Library Platform
- * Plugin URI: https://github.com/BetterBetterBetter/toms-member-learning-plugin
+ * Plugin URI: https://github.com/BetterBetterBetter/toms-library-plugin
  * Description: Member library platform for WordPress — courses, series, speakers and announcements, with MemberPress-driven access and a catalogue feed for a companion member-facing app.
- * Version: 0.13.0
+ * Version: 0.14.0
  * Author: Thrice Agency
  * License: GPL v2 or later
  * Text Domain: member-library
  * Requires at least: 6.0
  * Requires PHP: 8.0
- * Update URI: https://github.com/BetterBetterBetter/toms-member-learning-plugin
+ * Update URI: https://github.com/BetterBetterBetter/toms-library-plugin
  */
 
 // Prevent direct access.
@@ -18,12 +18,12 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants.
-define('MEMBER_LIBRARY_PLUGIN_VERSION', '0.13.0');
+define('MEMBER_LIBRARY_PLUGIN_VERSION', '0.14.0');
 define('MEMBER_LIBRARY_PLUGIN_FILE', __FILE__);
 define('MEMBER_LIBRARY_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('MEMBER_LIBRARY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MEMBER_LIBRARY_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('MEMBER_LIBRARY_PLUGIN_REPOSITORY_URL', 'https://github.com/BetterBetterBetter/toms-member-learning-plugin');
+define('MEMBER_LIBRARY_PLUGIN_REPOSITORY_URL', 'https://github.com/BetterBetterBetter/toms-library-plugin');
 
 // Plugin Update Checker - GitHub integration.
 if (file_exists(MEMBER_LIBRARY_PLUGIN_DIR . 'plugin-update-checker/plugin-update-checker.php')) {

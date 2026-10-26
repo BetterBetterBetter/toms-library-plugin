@@ -1,6 +1,6 @@
 # Release Process
 
-Canonical repo: `BetterBetterBetter/toms-member-learning-plugin` (public).
+Canonical repo: `BetterBetterBetter/toms-library-plugin` (public).
 
 One plugin core serves both brands (Tom's School of Life, Liberty Classroom);
 brand differences are per-install config (`MemberLibrary_Brand`), never separate

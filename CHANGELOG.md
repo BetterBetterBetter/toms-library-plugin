@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.14.0 - 2026-10-26
+
+- The repository moved to `BetterBetterBetter/toms-library-plugin`; the plugin's
+  repository and update URLs now use the new name (the old name redirects).
+
 - Courses and Series get a "Purchase options" box in place of the single
   purchase offer: up to three options, each with a name, price, price note,
   what's included (one per line), button text, optional button price and a
