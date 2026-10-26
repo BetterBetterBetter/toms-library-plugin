@@ -39,6 +39,9 @@ route back to the original administrator.
   after eight hours and is deleted before the switch-back redirect.
 - Finishing requires the same member session, the same authenticated original
   administrator, and the one-time token. Any mismatch fails with a generic 403.
+- The Web357 switch-back URL is normalized from its HTML-safe representation
+  before the administrator return bridge is added, so WordPress receives the
+  nonce as `_wpnonce` rather than the invalid `amp;_wpnonce` parameter.
 - All cross-application identity changes pass through the existing PKCE OAuth
   flow. The Library never receives WordPress cookies or an impersonation grant.
 - The browser marker is tab-scoped in `sessionStorage`. The catalogue scope

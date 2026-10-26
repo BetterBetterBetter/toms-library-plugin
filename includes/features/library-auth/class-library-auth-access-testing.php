@@ -161,9 +161,18 @@ class MemberLibrary_Auth_Access_Testing {
             'action' => self::OPEN_ACTION,
             'mode' => 'admin',
         ), admin_url('admin-post.php'));
-        $back_url = add_query_arg('redirect_to', $return_bridge, w357LoginAsUser::back_url($old_user));
+        $back_url = self::switch_back_url($old_user, $return_bridge);
         wp_safe_redirect($back_url, 302, 'Member Library Access Test');
         exit;
+    }
+
+    public static function switch_back_url(WP_User $old_user, $return_bridge) {
+        $login_as_user_url = html_entity_decode(
+            w357LoginAsUser::back_url($old_user),
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        return add_query_arg('redirect_to', rawurlencode((string) $return_bridge), $login_as_user_url);
     }
 
     public static function valid_token($token) {

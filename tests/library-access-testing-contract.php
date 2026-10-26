@@ -61,6 +61,30 @@ if (class_exists('MemberLibrary_Auth_Access_Testing')) {
         isset($stop_query['return_to']) && $stop_query['return_to'] === '/?access_test=0',
         'The administrator login does not clear the Library access-test state.'
     );
+
+    $assert(
+        method_exists('MemberLibrary_Auth_Access_Testing', 'switch_back_url'),
+        'The access test does not provide a normalized Login as User switch-back URL.'
+    );
+    if (method_exists('MemberLibrary_Auth_Access_Testing', 'switch_back_url')) {
+        $old_user = new WP_User();
+        $old_user->ID = 123;
+        $return_bridge = add_query_arg(array(
+            'action' => 'tsol_library_open_access_test',
+            'mode' => 'admin',
+        ), admin_url('admin-post.php'));
+        $switch_back_url = MemberLibrary_Auth_Access_Testing::switch_back_url($old_user, $return_bridge);
+        $switch_back_query = array();
+        parse_str((string) wp_parse_url($switch_back_url, PHP_URL_QUERY), $switch_back_query);
+        $assert(
+            isset($switch_back_query['_wpnonce']) && !isset($switch_back_query['amp;_wpnonce']),
+            'The Login as User nonce was left HTML-escaped and cannot be verified by WordPress.'
+        );
+        $assert(
+            isset($switch_back_query['redirect_to']) && $switch_back_query['redirect_to'] === $return_bridge,
+            'The Login as User switch-back does not preserve the administrator Library bridge.'
+        );
+    }
 }
 
 if ($failures) {
