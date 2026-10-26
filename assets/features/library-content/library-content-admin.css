@@ -1434,3 +1434,17 @@
     align-items: center;
     gap: 12px;
 }
+
+.tsol-library-purchase-option__bundle {
+    margin: 6px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tsol-library-purchase-option__bundle.is-live {
+    color: #00450c;
+}
+
+.tsol-library-purchase-option__bundle.is-hidden {
+    color: #8a2424;
+}

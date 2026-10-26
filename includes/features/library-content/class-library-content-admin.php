@@ -1177,7 +1177,7 @@ class MemberLibrary_Content_Admin {
         ?>
         <div class="tsol-library-purchase-options" data-library-purchase-options>
             <input type="hidden" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[purchase_options_present]" value="1" />
-            <p class="description"><?php esc_html_e('Each option appears as a card on the Library page, with its buy button in the sidebar. The first option gets the main button. Options missing anything required are saved but not shown.', 'member-library'); ?></p>
+            <p class="description"><?php esc_html_e('Each option appears as a card on the Library page, with its buy button in the sidebar. The first option gets the main button. Masterclasses usually have two: a one-time purchase and the membership. Options missing anything required are saved but not shown.', 'member-library'); ?></p>
 
             <div class="tsol-library-purchase-option-list" data-purchase-option-rows>
                 <?php foreach (array_values($options) as $index => $option) : ?>
@@ -1199,6 +1199,134 @@ class MemberLibrary_Content_Admin {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * What a pasted checkout link leads to, for the admin only (never used by
+     * the catalogue): {ok, text}, or null when there is nothing to check.
+     */
+    private function checkout_link_summary($url) {
+        $kind = MemberLibrary_Content_Model::purchase_link_kind($url);
+        if ('wordpress' === $kind) {
+            return $this->wordpress_link_summary($url);
+        }
+        return 'access_bundle' === $kind ? $this->access_bundle_summary($url) : null;
+    }
+
+    private function wordpress_link_summary($url) {
+        $post_id = (int) url_to_postid($url);
+        $post = $post_id > 0 ? get_post($post_id) : null;
+        if (!$post instanceof WP_Post || 'publish' !== $post->post_status) {
+            return array('ok' => false, 'text' => __('No published page was found at this link on this site.', 'member-library'));
+        }
+        if ('memberpressproduct' === $post->post_type && class_exists('MeprProduct')) {
+            $product = new MeprProduct($post->ID);
+            return array('ok' => true, 'text' => sprintf(
+                /* translators: 1: membership name, 2: what the buyer pays. */
+                __('MemberPress sign-up: %1$s — %2$s', 'member-library'),
+                get_the_title($post),
+                self::describe_memberpress_price($product)
+            ));
+        }
+        return array('ok' => true, 'text' => sprintf(
+            /* translators: %s: page title. */
+            __('Page on this site: %s', 'member-library'),
+            get_the_title($post)
+        ));
+    }
+
+    private static function describe_memberpress_price($product) {
+        $money = static function ($amount) {
+            $amount = (float) $amount;
+            return '$' . (floor($amount) === $amount ? number_format($amount, 0) : number_format($amount, 2));
+        };
+        $period_type = (string) ($product->period_type ?? '');
+        $period = max(1, (int) ($product->period ?? 1));
+        $units = array('weeks' => __('week', 'member-library'), 'months' => __('month', 'member-library'), 'years' => __('year', 'member-library'));
+        if ('lifetime' === $period_type || !isset($units[$period_type])) {
+            return sprintf(__('%s one-time', 'member-library'), $money($product->price ?? 0));
+        }
+        $per = 1 === $period ? $units[$period_type] : $period . ' ' . $units[$period_type] . 's';
+        $recurring = sprintf('%s/%s', $money($product->price ?? 0), $per);
+        if (!empty($product->trial) && (int) ($product->trial_days ?? 0) > 0) {
+            return sprintf(
+                /* translators: 1: trial price, 2: trial days, 3: recurring price. */
+                __('%1$s for the first %2$d days, then %3$s', 'member-library'),
+                $money($product->trial_amount ?? 0),
+                (int) $product->trial_days,
+                $recurring
+            );
+        }
+        return $recurring;
+    }
+
+    /**
+     * What Access says about a pasted bundle link. Reads the public bundle
+     * endpoint; cached for ten minutes.
+     */
+    private function access_bundle_summary($url) {
+        $bundle_id = MemberLibrary_Content_Model::access_bundle_id($url);
+        if ('' === $bundle_id) {
+            return null;
+        }
+        $cache_key = 'tsol_library_access_bundle_' . md5($url);
+        $cached = get_transient($cache_key);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $host = (string) wp_parse_url($url, PHP_URL_HOST);
+        $response = wp_remote_get('https://' . $host . '/api/bundles/' . rawurlencode($bundle_id), array(
+            'timeout' => 5,
+            'redirection' => 0,
+            'headers' => array('Accept' => 'application/json'),
+        ));
+        if (is_wp_error($response)) {
+            return array('ok' => false, 'text' => __("Couldn't reach Access to check this link.", 'member-library'));
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $bundle = is_array($body) && !empty($body['success']) && is_array($body['bundle'] ?? null) ? $body['bundle'] : null;
+        if (404 === $code || (null === $bundle && $code < 500 && $code >= 400)) {
+            $result = array('ok' => false, 'text' => __('Access says this bundle does not exist or is not active. Check the link.', 'member-library'));
+        } elseif (null === $bundle) {
+            return array('ok' => false, 'text' => __("Couldn't check this link with Access right now.", 'member-library'));
+        } else {
+            $result = array('ok' => true, 'text' => sprintf(
+                /* translators: 1: Access bundle name, 2: what the buyer pays. */
+                __('Access bundle: %1$s — %2$s', 'member-library'),
+                sanitize_text_field((string) ($bundle['name'] ?? '')),
+                self::describe_access_bundle_price($bundle)
+            ));
+        }
+        set_transient($cache_key, $result, 10 * MINUTE_IN_SECONDS);
+        return $result;
+    }
+
+    private static function describe_access_bundle_price(array $bundle) {
+        $money = static function ($amount) {
+            $amount = (float) $amount;
+            return '$' . (floor($amount) === $amount ? number_format($amount, 0) : number_format($amount, 2));
+        };
+        $period = strtolower((string) ($bundle['billing_period'] ?? ''));
+        $per = array('monthly' => __('month', 'member-library'), 'yearly' => __('year', 'member-library'), 'weekly' => __('week', 'member-library'))[$period] ?? $period;
+        $first = $bundle['first_payment_amount'] ?? null;
+        $recurring = $bundle['recurring_amount'] ?? ($bundle['price'] ?? null);
+
+        if ('one_time' === $period) {
+            return sprintf(__('%s one-time', 'member-library'), $money(null !== $first ? $first : ($bundle['price'] ?? 0)));
+        }
+        if (!empty($bundle['trial_enabled']) && (int) ($bundle['trial_days'] ?? 0) > 0) {
+            return sprintf(
+                /* translators: 1: first payment, 2: recurring amount, 3: period, 4: trial days. */
+                __('%1$s today, then %2$s/%3$s after %4$d days', 'member-library'),
+                $money(null !== $first ? $first : 0),
+                $money($recurring),
+                $per,
+                (int) $bundle['trial_days']
+            );
+        }
+        return sprintf(__('%1$s/%2$s', 'member-library'), $money($recurring), $per);
     }
 
     private function render_purchase_option_row($index, array $option, $show_status) {
@@ -1269,9 +1397,15 @@ class MemberLibrary_Content_Admin {
                     <input id="<?php echo esc_attr($id); ?>-button-price" type="text" maxlength="20" name="<?php echo esc_attr($name); ?>[button_price]" value="<?php echo esc_attr($value('button_price')); ?>" placeholder="<?php esc_attr_e('$97/mo — uses Price if blank', 'member-library'); ?>" />
                 </div>
                 <div class="tsol-library-field tsol-library-purchase-option__wide">
-                    <label for="<?php echo esc_attr($id); ?>-checkout-url"><?php esc_html_e('Stripe checkout link', 'member-library'); ?></label>
-                    <input id="<?php echo esc_attr($id); ?>-checkout-url" class="widefat" type="url" inputmode="url" name="<?php echo esc_attr($name); ?>[checkout_url]" value="<?php echo esc_attr($value('checkout_url')); ?>" placeholder="https://buy.stripe.com/…" />
-                    <p class="description"><?php esc_html_e('Paste the Stripe Payment Link or Checkout link for this option.', 'member-library'); ?></p>
+                    <label for="<?php echo esc_attr($id); ?>-checkout-url"><?php esc_html_e('Checkout link', 'member-library'); ?></label>
+                    <input id="<?php echo esc_attr($id); ?>-checkout-url" class="widefat" type="url" inputmode="url" name="<?php echo esc_attr($name); ?>[checkout_url]" value="<?php echo esc_attr($value('checkout_url')); ?>" placeholder="<?php echo esc_attr(home_url('/register/…')); ?>" />
+                    <p class="description"><?php esc_html_e('Memberships: paste the normal sign-up page on this site. Bundles: paste the checkout link from Access (https://access.tomwoods.com/checkout/bundle/…).', 'member-library'); ?></p>
+                    <?php if ($show_status) : ?>
+                        <?php $bundle = $this->checkout_link_summary($value('checkout_url')); ?>
+                        <?php if (null !== $bundle) : ?>
+                            <p class="tsol-library-purchase-option__bundle <?php echo esc_attr($bundle['ok'] ? 'is-live' : 'is-hidden'); ?>"><?php echo esc_html($bundle['text']); ?></p>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
                 <div class="tsol-library-field tsol-library-purchase-option__wide">
                     <label for="<?php echo esc_attr($id); ?>-includes"><?php esc_html_e("What's included", 'member-library'); ?> <span class="tsol-library-field__optional"><?php esc_html_e('(one per line)', 'member-library'); ?></span></label>

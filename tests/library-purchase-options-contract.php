@@ -3,8 +3,9 @@
  * Course/Series purchase options contract (admin repeater → catalogue).
  *
  * Admins author 1–3 purchase options per Course or Series: name, price, price
- * note, what's included, button text, optional button price and a Stripe
- * checkout link. The catalogue exports only complete options, and the legacy
+ * note, what's included, button text, optional button price and a checkout
+ * link: an Access bundle checkout (https://access.tomwoods.com/checkout/bundle/<id>)
+ * or a page on this WordPress site (e.g. a MemberPress sign-up page). The catalogue exports only complete options, and the legacy
  * single `purchase_offer` is derived from the first one.
  *
  * Run: wp eval-file tests/library-purchase-options-contract.php --skip-themes
@@ -41,13 +42,13 @@ $complete = array(
     'includes' => "Lifetime access to this course\n\n  1 month of The School free  \n",
     'button_label' => 'Buy lifetime access',
     'button_price' => '',
-    'checkout_url' => 'https://buy.stripe.com/test_abc123',
+    'checkout_url' => 'https://access.tomwoods.com/checkout/bundle/0e253ad3-741a-404d-b529-d255283332da',
 );
 
 // Sanitizing: trims, splits includes, keeps order, caps at three.
 $saved = MemberLibrary_Content_Model::sanitize_purchase_options(array(
     $complete,
-    array_merge($complete, array('name' => 'The School membership', 'checkout_url' => 'https://checkout.stripe.com/c/pay/cs_test_1')),
+    array_merge($complete, array('name' => 'The School membership', 'checkout_url' => 'https://access.tomwoods.com/checkout/bundle/tsol-western-civ-school-of-life-bundle')),
     array_merge($complete, array('name' => 'Third')),
     array_merge($complete, array('name' => 'Fourth is dropped')),
 ));
@@ -70,20 +71,43 @@ $saved = MemberLibrary_Content_Model::sanitize_purchase_options(array(
 ));
 $assert(strpos($saved[0]['name'], '<') === false && function_exists('mb_strlen') && mb_strlen($saved[0]['name']) <= 60, 'Option name kept markup or exceeded 60 characters.');
 
-// Completeness: name, price, button text and an https Stripe checkout link are required.
+// Completeness: name, price, button text and an https Access bundle or same-site WordPress link are required.
 $assert(MemberLibrary_Content_Model::purchase_option_problems(MemberLibrary_Content_Model::sanitize_purchase_options(array($complete))[0]) === array(), 'A complete option was reported as incomplete.');
 foreach (array(
     'name' => array('name' => ''),
     'price' => array('price' => ''),
     'button text' => array('button_label' => ''),
     'checkout link' => array('checkout_url' => ''),
-    'non-Stripe link' => array('checkout_url' => 'https://example.com/pay'),
-    'plain http link' => array('checkout_url' => 'http://buy.stripe.com/test_abc123'),
-    'look-alike host' => array('checkout_url' => 'https://buy.stripe.com.evil.test/x'),
-    'credentials in link' => array('checkout_url' => 'https://user:pass@buy.stripe.com/x'),
+    'third-party link' => array('checkout_url' => 'https://example.com/checkout/bundle/abc'),
+    'raw Stripe link (bypasses Access)' => array('checkout_url' => 'https://buy.stripe.com/test_abc123'),
+    'plain http link' => array('checkout_url' => 'http://access.tomwoods.com/checkout/bundle/abc'),
+    'look-alike host' => array('checkout_url' => 'https://access.tomwoods.com.evil.test/checkout/bundle/abc'),
+    'credentials in link' => array('checkout_url' => 'https://user:pass@access.tomwoods.com/checkout/bundle/abc'),
+    'Access page that is not a bundle checkout' => array('checkout_url' => 'https://access.tomwoods.com/dashboard'),
+    'site link over plain http' => array('checkout_url' => str_replace('https://', 'http://', home_url('/register/monthly/'))),
+    'bundle id missing' => array('checkout_url' => 'https://access.tomwoods.com/checkout/bundle/'),
 ) as $case => $override) {
     $rows = MemberLibrary_Content_Model::sanitize_purchase_options(array(array_merge($complete, $override)));
     $assert(!empty($rows) && MemberLibrary_Content_Model::purchase_option_problems($rows[0]) !== array(), "An option with a missing/invalid {$case} was reported as complete.");
+}
+
+// Normal memberships use this WordPress site's own sign-up pages.
+$site_link = set_url_scheme(home_url('/register/monthly/'), 'https');
+$rows = MemberLibrary_Content_Model::sanitize_purchase_options(array(array_merge($complete, array('checkout_url' => $site_link))));
+$assert(!empty($rows) && MemberLibrary_Content_Model::purchase_option_problems($rows[0]) === array(), 'A same-site WordPress sign-up link was not accepted.');
+$assert(method_exists('MemberLibrary_Content_Model', 'purchase_link_kind'), 'Purchase link kind helper is missing.');
+if (method_exists('MemberLibrary_Content_Model', 'purchase_link_kind')) {
+    $assert(MemberLibrary_Content_Model::purchase_link_kind($site_link) === 'wordpress', 'A same-site link was not classified as WordPress.');
+    $assert(MemberLibrary_Content_Model::purchase_link_kind('https://access.tomwoods.com/checkout/bundle/abc') === 'access_bundle', 'An Access bundle link was not classified as a bundle.');
+    $assert(MemberLibrary_Content_Model::purchase_link_kind('https://buy.stripe.com/x') === '', 'A raw Stripe link was classified as allowed.');
+}
+
+// The Access bundle id is read from the link (used to look the bundle up for admins).
+$assert(method_exists('MemberLibrary_Content_Model', 'access_bundle_id'), 'Access bundle id helper is missing.');
+if (method_exists('MemberLibrary_Content_Model', 'access_bundle_id')) {
+    $assert(MemberLibrary_Content_Model::access_bundle_id('https://access.tomwoods.com/checkout/bundle/0e253ad3-741a-404d-b529-d255283332da') === '0e253ad3-741a-404d-b529-d255283332da', 'Bundle id was not read from an Access checkout link.');
+    $assert(MemberLibrary_Content_Model::access_bundle_id('https://access.tomwoods.com/checkout/bundle/tsol-western-civ-school-of-life-bundle?ref=x') === 'tsol-western-civ-school-of-life-bundle', 'Slug bundle ids or query strings broke bundle id parsing.');
+    $assert(MemberLibrary_Content_Model::access_bundle_id('https://buy.stripe.com/test') === '', 'A non-Access link produced a bundle id.');
 }
 
 // Catalogue export on a disposable Course.
@@ -99,7 +123,7 @@ if (!is_wp_error($course_id)) {
     update_post_meta($course_id, MemberLibrary_Content_Model::META_PURCHASE_OPTIONS, MemberLibrary_Content_Model::sanitize_purchase_options(array(
         array_merge($complete, array('name' => 'Incomplete', 'checkout_url' => 'https://example.com/pay')),
         $complete,
-        array_merge($complete, array('name' => 'The School membership', 'price' => '$97', 'price_note' => 'per month', 'button_label' => 'Join The School', 'button_price' => '$97/mo', 'checkout_url' => 'https://buy.stripe.com/test_school')),
+        array_merge($complete, array('name' => 'The School membership', 'price' => '$97', 'price_note' => 'per month', 'button_label' => 'Join The School', 'button_price' => '$97/mo', 'checkout_url' => 'https://access.tomwoods.com/checkout/bundle/school-monthly')),
     )));
 
     $exported = MemberLibrary_Content_Catalogue::purchase_options_for_post($course);
@@ -111,7 +135,7 @@ if (!is_wp_error($course_id)) {
     $legacy = MemberLibrary_Content_Catalogue::purchase_offer_for_post($course);
     $assert(
         is_array($legacy)
-        && $legacy['url'] === 'https://buy.stripe.com/test_abc123'
+        && $legacy['url'] === 'https://access.tomwoods.com/checkout/bundle/0e253ad3-741a-404d-b529-d255283332da'
         && $legacy['button_label'] === 'Buy lifetime access'
         && $legacy['price'] === '$197',
         'The legacy purchase_offer was not derived from the first complete option.'

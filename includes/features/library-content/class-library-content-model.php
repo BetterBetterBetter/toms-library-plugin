@@ -519,13 +519,63 @@ class MemberLibrary_Content_Model {
     }
 
     /**
-     * Hosts a purchase option may send buyers to. Stripe Payment Links and
-     * Checkout only, over HTTPS; filter `member_library_purchase_checkout_hosts`
-     * to allow another checkout host.
+     * Access hosts a purchase option may send buyers to. Purchases go through
+     * Access bundle checkouts (Access creates the Stripe session and grants
+     * the memberships), so raw Stripe links are not accepted. Defaults to the
+     * Access platform configured for SSO, else access.tomwoods.com; filter
+     * `member_library_purchase_checkout_hosts` to change it.
      */
     public static function purchase_checkout_hosts() {
-        $hosts = apply_filters('member_library_purchase_checkout_hosts', array('buy.stripe.com', 'checkout.stripe.com'));
+        $hosts = array('access.tomwoods.com');
+        $platform = (string) get_option('access_sso_platform_url', '');
+        $platform_host = '' === $platform ? '' : strtolower((string) wp_parse_url($platform, PHP_URL_HOST));
+        if ('' !== $platform_host) {
+            $hosts[] = $platform_host;
+        }
+        $hosts = apply_filters('member_library_purchase_checkout_hosts', array_values(array_unique($hosts)));
         return array_values(array_filter(array_map('strtolower', array_map('strval', (array) $hosts))));
+    }
+
+    /**
+     * The Access bundle id from `https://<access host>/checkout/bundle/<id>`,
+     * or '' when the link is not an Access bundle checkout.
+     */
+    public static function access_bundle_id($url) {
+        $parts = wp_parse_url((string) $url);
+        if (
+            !is_array($parts)
+            || 'https' !== strtolower((string) ($parts['scheme'] ?? ''))
+            || !empty($parts['user'])
+            || !empty($parts['pass'])
+            || !in_array(strtolower((string) ($parts['host'] ?? '')), self::purchase_checkout_hosts(), true)
+        ) {
+            return '';
+        }
+
+        return preg_match('~^/checkout/bundle/([A-Za-z0-9][A-Za-z0-9_-]{0,99})/?$~', (string) ($parts['path'] ?? ''), $match)
+            ? $match[1]
+            : '';
+    }
+
+    /**
+     * Where a purchase link sends buyers: 'access_bundle' (an Access bundle
+     * checkout, for bundles), 'wordpress' (an HTTPS page on this site, e.g. a
+     * MemberPress sign-up page, for normal memberships) or '' when neither.
+     */
+    public static function purchase_link_kind($url) {
+        if ('' !== self::access_bundle_id($url)) {
+            return 'access_bundle';
+        }
+        $parts = wp_parse_url((string) $url);
+        $site_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        return is_array($parts)
+            && 'https' === strtolower((string) ($parts['scheme'] ?? ''))
+            && empty($parts['user'])
+            && empty($parts['pass'])
+            && '' !== $site_host
+            && strtolower((string) ($parts['host'] ?? '')) === $site_host
+                ? 'wordpress'
+                : '';
     }
 
     /**
@@ -545,15 +595,10 @@ class MemberLibrary_Content_Model {
         }
 
         $url = (string) ($option['checkout_url'] ?? '');
-        $parts = '' === $url ? false : wp_parse_url($url);
         if ('' === $url) {
-            $problems[] = __('a Stripe checkout link', 'member-library');
-        } elseif (
-            !is_array($parts)
-            || 'https' !== strtolower((string) ($parts['scheme'] ?? ''))
-            || !in_array(strtolower((string) ($parts['host'] ?? '')), self::purchase_checkout_hosts(), true)
-        ) {
-            $problems[] = __('a Stripe checkout link (https://buy.stripe.com/… or https://checkout.stripe.com/…)', 'member-library');
+            $problems[] = __('a checkout link', 'member-library');
+        } elseif ('' === self::purchase_link_kind($url)) {
+            $problems[] = __('a checkout link on this site (e.g. a sign-up page) or an Access bundle checkout (https://access.tomwoods.com/checkout/bundle/…)', 'member-library');
         }
 
         return $problems;

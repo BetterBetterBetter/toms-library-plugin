@@ -5,10 +5,13 @@
 - Courses and Series get a "Purchase options" box in place of the single
   purchase offer: up to three options, each with a name, price, price note,
   what's included (one per line), button text, optional button price and a
-  Stripe checkout link (`buy.stripe.com` or `checkout.stripe.com`, HTTPS).
-  Options can be reordered; the first one is the Library's main buy button.
-  Each saved option shows whether it is live in the Library or what it still
-  needs. An existing single offer is carried into the first option the next
+  checkout link: the normal sign-up page on this site for memberships, or an
+  Access bundle checkout (`https://access.tomwoods.com/checkout/bundle/…`) for
+  bundles. Raw Stripe and third-party links are rejected. Options can be
+  reordered; the first one is the Library's main buy button. Each saved
+  option shows whether it is live in the Library or what it still needs, and
+  what the link sells: the MemberPress membership and price, or what Access
+  will charge for the bundle (from Access's public bundle details). An existing single offer is carried into the first option the next
   time the item is edited.
 - Catalogue schema `20261026.1` adds `purchase_options` (complete options
   only). `purchase_offer` is kept for older Library releases and mirrors the
