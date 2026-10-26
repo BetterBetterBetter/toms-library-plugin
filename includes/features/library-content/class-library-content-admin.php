@@ -544,7 +544,7 @@ class MemberLibrary_Content_Admin {
         ), true)) {
             add_meta_box(
                 'tsol-library-purchase-offer',
-                __('Purchase offer', 'member-library'),
+                __('Purchase options', 'member-library'),
                 array($this, 'render_purchase_offer_meta_box'),
                 $post_type,
                 'normal',
@@ -1162,30 +1162,121 @@ class MemberLibrary_Content_Admin {
 
     public function render_purchase_offer_meta_box($post) {
         wp_nonce_field(self::NONCE_ACTION, self::NONCE_NAME);
-        $sale_price = MemberLibrary_Content_Model::sanitize_sale_price(get_post_meta($post->ID, MemberLibrary_Content_Model::META_SALE_PRICE, true));
-        $purchase_url = MemberLibrary_Content_Model::sanitize_purchase_url(get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_URL, true));
-        $button_label = MemberLibrary_Content_Model::sanitize_purchase_button_label(get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL, true));
-        $default_label = MemberLibrary_Content_Model::SERIES_POST_TYPE === $post->post_type
-            ? __('Buy series', 'member-library')
-            : __('Buy course', 'member-library');
+        $options = MemberLibrary_Content_Model::sanitize_purchase_options(
+            get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_OPTIONS, true)
+        );
+        if (empty($options)) {
+            // Carry a legacy single offer into the first row so nothing is lost.
+            $legacy = MemberLibrary_Content_Model::sanitize_purchase_options(array(array(
+                'price' => get_post_meta($post->ID, MemberLibrary_Content_Model::META_SALE_PRICE, true),
+                'button_label' => get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL, true),
+                'checkout_url' => get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_URL, true),
+            )));
+            $options = !empty($legacy) ? $legacy : array(array());
+        }
         ?>
-        <div class="tsol-library-editor">
-            <input type="hidden" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[purchase_offer_present]" value="1" />
-            <div class="tsol-library-field-grid">
-                <div class="tsol-library-field">
-                    <label for="tsol-library-sale-price"><?php esc_html_e('Sale price', 'member-library'); ?></label>
-                    <input type="text" id="tsol-library-sale-price" maxlength="40" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[sale_price]" value="<?php echo esc_attr($sale_price); ?>" placeholder="<?php esc_attr_e('$49 one-time', 'member-library'); ?>" />
-                    <p class="description"><?php esc_html_e('Display text only. Include the currency and billing cadence when relevant.', 'member-library'); ?></p>
-                </div>
-                <div class="tsol-library-field">
-                    <label for="tsol-library-purchase-button-label"><?php esc_html_e('Buy button text', 'member-library'); ?></label>
-                    <input type="text" id="tsol-library-purchase-button-label" maxlength="80" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[purchase_button_label]" value="<?php echo esc_attr($button_label); ?>" placeholder="<?php echo esc_attr($default_label); ?>" />
-                </div>
+        <div class="tsol-library-purchase-options" data-library-purchase-options>
+            <input type="hidden" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[purchase_options_present]" value="1" />
+            <p class="description"><?php esc_html_e('Each option appears as a card on the Library page, with its buy button in the sidebar. The first option gets the main button. Options missing anything required are saved but not shown.', 'member-library'); ?></p>
+
+            <div class="tsol-library-purchase-option-list" data-purchase-option-rows>
+                <?php foreach (array_values($options) as $index => $option) : ?>
+                    <?php $this->render_purchase_option_row($index, $option, true); ?>
+                <?php endforeach; ?>
             </div>
-            <div class="tsol-library-field">
-                <label for="tsol-library-purchase-url"><?php esc_html_e('Sales page or checkout URL', 'member-library'); ?></label>
-                <input class="widefat" type="url" id="tsol-library-purchase-url" name="<?php echo esc_attr(self::PAYLOAD_NAME); ?>[purchase_url]" value="<?php echo esc_attr($purchase_url); ?>" placeholder="https://example.com/checkout" inputmode="url" />
-                <p class="description"><?php esc_html_e('The Library shows the purchase button only when this is a valid HTTP or HTTPS URL.', 'member-library'); ?></p>
+
+            <script type="text/html" data-purchase-option-template>
+                <?php $this->render_purchase_option_row('__index__', array(), false); ?>
+            </script>
+
+            <div class="tsol-library-purchase-option-add">
+                <button type="button" class="button button-secondary" data-purchase-option-add><?php esc_html_e('Add option', 'member-library'); ?></button>
+                <span class="description"><?php echo esc_html(sprintf(
+                    /* translators: %d: maximum number of purchase options. */
+                    __('Up to %d options.', 'member-library'),
+                    MemberLibrary_Content_Model::PURCHASE_OPTIONS_MAX
+                )); ?></span>
+            </div>
+        </div>
+        <?php
+    }
+
+    private function render_purchase_option_row($index, array $option, $show_status) {
+        $name = self::PAYLOAD_NAME . '[purchase_options][' . $index . ']';
+        $id = 'tsol-library-purchase-option-' . $index;
+        $value = static function ($key) use ($option) {
+            return (string) ($option[$key] ?? '');
+        };
+        $is_blank = empty(array_filter($option, static function ($field) {
+            return array() !== $field && '' !== $field;
+        }));
+        $problems = $is_blank ? array() : MemberLibrary_Content_Model::purchase_option_problems($option);
+        ?>
+        <div class="tsol-library-purchase-option" data-purchase-option-row>
+            <div class="tsol-library-purchase-option__header">
+                <button type="button" class="button-link tsol-library-outcome-row__handle" data-purchase-option-handle>
+                    <span class="dashicons dashicons-menu" aria-hidden="true"></span>
+                    <span class="screen-reader-text"><?php esc_html_e('Drag to reorder option', 'member-library'); ?></span>
+                </button>
+                <strong data-purchase-option-position><?php echo esc_html(sprintf(
+                    /* translators: %s: option number. */
+                    __('Option %s', 'member-library'),
+                    is_numeric($index) ? (string) ((int) $index + 1) : ''
+                )); ?></strong>
+                <?php if ($show_status && !$is_blank) : ?>
+                    <?php if (empty($problems)) : ?>
+                        <span class="tsol-library-purchase-option__status is-live"><?php esc_html_e('Shown in the Library', 'member-library'); ?></span>
+                    <?php else : ?>
+                        <span class="tsol-library-purchase-option__status is-hidden"><?php echo esc_html(sprintf(
+                            /* translators: %s: comma-separated list of missing fields. */
+                            __('Not shown: needs %s', 'member-library'),
+                            implode(', ', $problems)
+                        )); ?></span>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <span class="tsol-library-purchase-option__actions">
+                    <button type="button" class="button-link" data-row-up>
+                        <span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
+                        <span class="screen-reader-text"><?php esc_html_e('Move option up', 'member-library'); ?></span>
+                    </button>
+                    <button type="button" class="button-link" data-row-down>
+                        <span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
+                        <span class="screen-reader-text"><?php esc_html_e('Move option down', 'member-library'); ?></span>
+                    </button>
+                    <button type="button" class="button-link button-link-delete" data-purchase-option-remove><?php esc_html_e('Remove', 'member-library'); ?></button>
+                </span>
+            </div>
+
+            <div class="tsol-library-purchase-option__fields">
+                <div class="tsol-library-field">
+                    <label for="<?php echo esc_attr($id); ?>-name"><?php esc_html_e('Name', 'member-library'); ?></label>
+                    <input id="<?php echo esc_attr($id); ?>-name" type="text" maxlength="60" name="<?php echo esc_attr($name); ?>[name]" value="<?php echo esc_attr($value('name')); ?>" placeholder="<?php esc_attr_e('Lifetime access', 'member-library'); ?>" data-purchase-option-name />
+                </div>
+                <div class="tsol-library-field">
+                    <label for="<?php echo esc_attr($id); ?>-price"><?php esc_html_e('Price', 'member-library'); ?></label>
+                    <input id="<?php echo esc_attr($id); ?>-price" type="text" maxlength="20" name="<?php echo esc_attr($name); ?>[price]" value="<?php echo esc_attr($value('price')); ?>" placeholder="$197" />
+                </div>
+                <div class="tsol-library-field">
+                    <label for="<?php echo esc_attr($id); ?>-price-note"><?php esc_html_e('Price note', 'member-library'); ?> <span class="tsol-library-field__optional"><?php esc_html_e('(optional)', 'member-library'); ?></span></label>
+                    <input id="<?php echo esc_attr($id); ?>-price-note" type="text" maxlength="40" name="<?php echo esc_attr($name); ?>[price_note]" value="<?php echo esc_attr($value('price_note')); ?>" placeholder="<?php esc_attr_e('one-time / per month', 'member-library'); ?>" />
+                </div>
+                <div class="tsol-library-field">
+                    <label for="<?php echo esc_attr($id); ?>-button-label"><?php esc_html_e('Button text', 'member-library'); ?></label>
+                    <input id="<?php echo esc_attr($id); ?>-button-label" type="text" maxlength="60" name="<?php echo esc_attr($name); ?>[button_label]" value="<?php echo esc_attr($value('button_label')); ?>" placeholder="<?php esc_attr_e('Buy lifetime access', 'member-library'); ?>" />
+                </div>
+                <div class="tsol-library-field">
+                    <label for="<?php echo esc_attr($id); ?>-button-price"><?php esc_html_e('Button price', 'member-library'); ?> <span class="tsol-library-field__optional"><?php esc_html_e('(optional)', 'member-library'); ?></span></label>
+                    <input id="<?php echo esc_attr($id); ?>-button-price" type="text" maxlength="20" name="<?php echo esc_attr($name); ?>[button_price]" value="<?php echo esc_attr($value('button_price')); ?>" placeholder="<?php esc_attr_e('$97/mo — uses Price if blank', 'member-library'); ?>" />
+                </div>
+                <div class="tsol-library-field tsol-library-purchase-option__wide">
+                    <label for="<?php echo esc_attr($id); ?>-checkout-url"><?php esc_html_e('Stripe checkout link', 'member-library'); ?></label>
+                    <input id="<?php echo esc_attr($id); ?>-checkout-url" class="widefat" type="url" inputmode="url" name="<?php echo esc_attr($name); ?>[checkout_url]" value="<?php echo esc_attr($value('checkout_url')); ?>" placeholder="https://buy.stripe.com/…" />
+                    <p class="description"><?php esc_html_e('Paste the Stripe Payment Link or Checkout link for this option.', 'member-library'); ?></p>
+                </div>
+                <div class="tsol-library-field tsol-library-purchase-option__wide">
+                    <label for="<?php echo esc_attr($id); ?>-includes"><?php esc_html_e("What's included", 'member-library'); ?> <span class="tsol-library-field__optional"><?php esc_html_e('(one per line)', 'member-library'); ?></span></label>
+                    <textarea id="<?php echo esc_attr($id); ?>-includes" rows="3" name="<?php echo esc_attr($name); ?>[includes]" placeholder="<?php esc_attr_e("Lifetime access to this course\n1 month of The School free", 'member-library'); ?>"><?php echo esc_textarea(implode("\n", (array) ($option['includes'] ?? array()))); ?></textarea>
+                </div>
             </div>
         </div>
         <?php
@@ -1521,10 +1612,17 @@ class MemberLibrary_Content_Admin {
             MemberLibrary_Content_Model::COURSE_POST_TYPE,
             MemberLibrary_Content_Model::SERIES_POST_TYPE,
         ), true)) {
-            if (!empty($payload['purchase_offer_present'])) {
-                update_post_meta($post_id, MemberLibrary_Content_Model::META_SALE_PRICE, MemberLibrary_Content_Model::sanitize_sale_price($payload['sale_price'] ?? ''));
-                update_post_meta($post_id, MemberLibrary_Content_Model::META_PURCHASE_URL, MemberLibrary_Content_Model::sanitize_purchase_url($payload['purchase_url'] ?? ''));
-                update_post_meta($post_id, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL, MemberLibrary_Content_Model::sanitize_purchase_button_label($payload['purchase_button_label'] ?? ''));
+            if (!empty($payload['purchase_options_present'])) {
+                update_post_meta(
+                    $post_id,
+                    MemberLibrary_Content_Model::META_PURCHASE_OPTIONS,
+                    MemberLibrary_Content_Model::sanitize_purchase_options($payload['purchase_options'] ?? array())
+                );
+                // The repeater now owns purchase data; the legacy single offer was
+                // carried into its first row when the box was rendered.
+                delete_post_meta($post_id, MemberLibrary_Content_Model::META_SALE_PRICE);
+                delete_post_meta($post_id, MemberLibrary_Content_Model::META_PURCHASE_URL);
+                delete_post_meta($post_id, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL);
             }
             update_post_meta(
                 $post_id,

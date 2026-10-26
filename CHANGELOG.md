@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Courses and Series get a "Purchase options" box in place of the single
+  purchase offer: up to three options, each with a name, price, price note,
+  what's included (one per line), button text, optional button price and a
+  Stripe checkout link (`buy.stripe.com` or `checkout.stripe.com`, HTTPS).
+  Options can be reordered; the first one is the Library's main buy button.
+  Each saved option shows whether it is live in the Library or what it still
+  needs. An existing single offer is carried into the first option the next
+  time the item is edited.
+- Catalogue schema `20261026.1` adds `purchase_options` (complete options
+  only). `purchase_offer` is kept for older Library releases and mirrors the
+  first option. Fixed the Login as User switch-back link that WordPress
+  rejected as expired.
+
 ## 0.13.0 - 2026-09-03
 
 - Fixed the Access Groups review wrongly blocking publication on sites where

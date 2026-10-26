@@ -13,7 +13,7 @@ See the workspace consolidation record in
 ## What this plugin is (and is not)
 
 - **Is:** the Library content model (courses, series, items, speakers,
-  collections, and Course/Series purchase offers), the WordPress↔app OAuth
+  collections, and Course/Series purchase options), the WordPress↔app OAuth
   bridge (`library-auth`), the catalogue
   projection + signed webhooks, native MemberPress access groups, member
   announcements, administrator Library access testing through the optional

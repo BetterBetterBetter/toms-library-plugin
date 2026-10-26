@@ -475,6 +475,77 @@
         reindex();
     }
 
+    function initPurchaseOptionsEditor($editor) {
+        var $rows = $editor.find('[data-purchase-option-rows]');
+        var template = $editor.find('[data-purchase-option-template]').html();
+        var nextIndex = $rows.children('[data-purchase-option-row]').length;
+        var maximumOptions = 3;
+
+        function reindex() {
+            reindexRows($rows, '[data-purchase-option-row]', 'purchase_options');
+            $rows.children('[data-purchase-option-row]').each(function(index) {
+                var $row = $(this);
+                var position = index + 1;
+
+                $row.find('[data-purchase-option-position]').text('Option ' + position);
+                $row.find('[data-purchase-option-handle]').attr('aria-label', 'Drag option ' + position + ' to reorder');
+                $row.find('[data-row-up]').attr('aria-label', 'Move option ' + position + ' up');
+                $row.find('[data-row-down]').attr('aria-label', 'Move option ' + position + ' down');
+                $row.find('[data-purchase-option-remove]').attr('aria-label', 'Remove option ' + position);
+            });
+            $editor.find('[data-purchase-option-add]').prop('disabled', $rows.children('[data-purchase-option-row]').length >= maximumOptions);
+        }
+
+        $editor.on('click', '[data-purchase-option-add]', function() {
+            if ($rows.children('[data-purchase-option-row]').length >= maximumOptions) {
+                return;
+            }
+
+            var $row = $(replaceIndex(template, 'new' + nextIndex));
+
+            nextIndex += 1;
+            $rows.append($row);
+            if ($rows.hasClass('ui-sortable')) {
+                $rows.sortable('refresh');
+            }
+            reindex();
+            $row.find('[data-purchase-option-name]').trigger('focus');
+        });
+
+        $editor.on('click', '[data-purchase-option-remove]', function() {
+            var $row = $(this).closest('[data-purchase-option-row]');
+
+            if ($rows.children('[data-purchase-option-row]').length === 1) {
+                $row.find('input[type="text"], input[type="url"], textarea').val('');
+                $row.find('.tsol-library-purchase-option__status').remove();
+            } else {
+                $row.remove();
+            }
+            reindex();
+        });
+
+        $editor.on('click', '[data-row-up], [data-row-down]', function() {
+            var $button = $(this);
+
+            moveRow($button.closest('[data-purchase-option-row]'), $button.is('[data-row-up]') ? 'up' : 'down');
+            reindex();
+        });
+
+        if ($.fn.sortable) {
+            $rows.sortable({
+                cancel: 'input, textarea, select, option',
+                handle: '[data-purchase-option-handle]',
+                items: '> [data-purchase-option-row]',
+                placeholder: 'tsol-library-outcome-row--placeholder',
+                forcePlaceholderSize: true,
+                tolerance: 'pointer',
+                update: reindex,
+            });
+        }
+
+        reindex();
+    }
+
     function arrangeCourseEditorialFlow() {
         if (config().postType !== 'tsol_library_course') {
             return;
@@ -1099,6 +1170,9 @@
         });
         $('[data-library-course-page-editor]').each(function() {
             initCoursePageEditor($(this));
+        });
+        $('[data-library-purchase-options]').each(function() {
+            initPurchaseOptionsEditor($(this));
         });
         $('[data-speaker-picker]').each(function() {
             initSpeakerPicker($(this));

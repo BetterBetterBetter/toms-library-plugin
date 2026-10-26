@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class MemberLibrary_Content_Catalogue {
 
-    const SCHEMA_VERSION = '20260902.1';
+    const SCHEMA_VERSION = '20261026.1';
     const DEFAULT_PAGE_SIZE = 50;
     const MAX_PAGE_SIZE = 100;
 
@@ -155,7 +155,8 @@ class MemberLibrary_Content_Catalogue {
                 MemberLibrary_Content_Model::META_AI_ASSISTANT_QUESTIONS,
                 true
             )) : array(),
-            'purchase_offer' => self::purchase_offer($post),
+            'purchase_offer' => self::purchase_offer_for_post($post),
+            'purchase_options' => self::purchase_options_for_post($post),
             'published_at' => self::post_date($post->post_date_gmt),
             'modified_at' => self::post_date($post->post_modified_gmt),
             'last_updated_at' => self::last_updated_at($post),
@@ -189,12 +190,60 @@ class MemberLibrary_Content_Catalogue {
         return $record;
     }
 
-    private static function purchase_offer(WP_Post $post) {
-        if (!in_array($post->post_type, array(
+    private static function sells(WP_Post $post) {
+        return in_array($post->post_type, array(
             MemberLibrary_Content_Model::COURSE_POST_TYPE,
             MemberLibrary_Content_Model::SERIES_POST_TYPE,
-        ), true)) {
+        ), true);
+    }
+
+    /**
+     * Complete purchase options for a Course or Series, in admin order. An
+     * empty button price falls back to the option price. Lessons and items
+     * always export an empty list.
+     */
+    public static function purchase_options_for_post(WP_Post $post) {
+        if (!self::sells($post)) {
+            return array();
+        }
+
+        $options = array();
+        $stored = MemberLibrary_Content_Model::sanitize_purchase_options(
+            get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_OPTIONS, true)
+        );
+        foreach ($stored as $option) {
+            if (array() !== MemberLibrary_Content_Model::purchase_option_problems($option)) {
+                continue;
+            }
+            $options[] = array(
+                'name' => $option['name'],
+                'price' => $option['price'],
+                'price_note' => $option['price_note'],
+                'includes' => $option['includes'],
+                'button_label' => $option['button_label'],
+                'button_price' => '' !== $option['button_price'] ? $option['button_price'] : $option['price'],
+                'checkout_url' => $option['checkout_url'],
+            );
+        }
+
+        return $options;
+    }
+
+    /**
+     * The single legacy offer kept for Library releases that predate
+     * purchase_options: the first complete option, else the legacy fields.
+     */
+    public static function purchase_offer_for_post(WP_Post $post) {
+        if (!self::sells($post)) {
             return null;
+        }
+        $options = self::purchase_options_for_post($post);
+        if (!empty($options)) {
+            return array(
+                'price' => $options[0]['price'],
+                'url' => $options[0]['checkout_url'],
+                'button_label' => $options[0]['button_label'],
+            );
         }
         $url = MemberLibrary_Content_Model::sanitize_purchase_url(get_post_meta($post->ID, MemberLibrary_Content_Model::META_PURCHASE_URL, true));
         if ('' === $url) {

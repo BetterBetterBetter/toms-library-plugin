@@ -50,6 +50,9 @@ class MemberLibrary_Content_Model {
     const META_SALE_PRICE = '_tsol_library_sale_price';
     const META_PURCHASE_URL = '_tsol_library_purchase_url';
     const META_PURCHASE_BUTTON_LABEL = '_tsol_library_purchase_button_label';
+    const META_PURCHASE_OPTIONS = '_tsol_library_purchase_options';
+    const PURCHASE_OPTIONS_MAX = 3;
+    const PURCHASE_OPTION_INCLUDES_MAX = 8;
     const META_SECTION_KEY = '_tsol_library_section_key';
     const META_SECTION_TITLE = '_tsol_library_section_title';
     const META_SECTION_POSITION = '_tsol_library_section_position';
@@ -129,6 +132,7 @@ class MemberLibrary_Content_Model {
             self::META_SALE_PRICE,
             self::META_PURCHASE_URL,
             self::META_PURCHASE_BUTTON_LABEL,
+            self::META_PURCHASE_OPTIONS,
             self::META_SECTION_KEY,
             self::META_SECTION_TITLE,
             self::META_SECTION_POSITION,
@@ -163,6 +167,7 @@ class MemberLibrary_Content_Model {
             self::META_SALE_PRICE,
             self::META_PURCHASE_URL,
             self::META_PURCHASE_BUTTON_LABEL,
+            self::META_PURCHASE_OPTIONS,
             self::META_TRANSCRIPT_CONTENT,
             self::META_TRANSCRIPT_HASH,
             self::META_TRANSCRIPT_LANGUAGE,
@@ -178,6 +183,7 @@ class MemberLibrary_Content_Model {
             $keys[] = self::META_SALE_PRICE;
             $keys[] = self::META_PURCHASE_URL;
             $keys[] = self::META_PURCHASE_BUTTON_LABEL;
+            $keys[] = self::META_PURCHASE_OPTIONS;
         } elseif (self::SERIES_POST_TYPE === $post_type) {
             $keys[] = self::META_SERIES_GROUPS;
             $keys[] = self::META_AI_ASSISTANT_ENABLED;
@@ -185,6 +191,7 @@ class MemberLibrary_Content_Model {
             $keys[] = self::META_SALE_PRICE;
             $keys[] = self::META_PURCHASE_URL;
             $keys[] = self::META_PURCHASE_BUTTON_LABEL;
+            $keys[] = self::META_PURCHASE_OPTIONS;
         } elseif (self::ITEM_POST_TYPE === $post_type) {
             $keys[] = self::META_AVAILABILITY;
             $keys[] = self::META_RELEASE_AT_GMT;
@@ -445,6 +452,111 @@ class MemberLibrary_Content_Model {
 
     public static function sanitize_purchase_button_label($value) {
         return self::bounded_plain_text($value, 80);
+    }
+
+    /**
+     * Purchase options authored in the Course/Series "Purchase options" box.
+     * Keeps up to three rows in order. A row the admin left completely empty is
+     * dropped; a partly filled row is kept so typed work is never lost, and the
+     * catalogue exports only rows that purchase_option_problems() accepts.
+     */
+    public static function sanitize_purchase_options($value) {
+        if (!is_array($value)) {
+            return array();
+        }
+
+        $options = array();
+        foreach (array_values($value) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $option = self::sanitize_purchase_option($row);
+            if (null === $option) {
+                continue;
+            }
+            $options[] = $option;
+            if (count($options) >= self::PURCHASE_OPTIONS_MAX) {
+                break;
+            }
+        }
+
+        return $options;
+    }
+
+    private static function sanitize_purchase_option(array $row) {
+        $includes = $row['includes'] ?? array();
+        if (!is_array($includes)) {
+            $includes = preg_split('/\r\n|\r|\n/', (string) $includes);
+        }
+        $clean_includes = array();
+        foreach ($includes as $item) {
+            $item = self::bounded_plain_text(is_scalar($item) ? $item : '', 120);
+            if ('' !== $item) {
+                $clean_includes[] = $item;
+            }
+            if (count($clean_includes) >= self::PURCHASE_OPTION_INCLUDES_MAX) {
+                break;
+            }
+        }
+
+        $option = array(
+            'name' => self::bounded_plain_text($row['name'] ?? '', 60),
+            'price' => self::bounded_plain_text($row['price'] ?? '', 20),
+            'price_note' => self::bounded_plain_text($row['price_note'] ?? '', 40),
+            'includes' => $clean_includes,
+            'button_label' => self::bounded_plain_text($row['button_label'] ?? '', 60),
+            'button_price' => self::bounded_plain_text($row['button_price'] ?? '', 20),
+            'checkout_url' => self::sanitize_purchase_url($row['checkout_url'] ?? ''),
+        );
+
+        foreach ($option as $field) {
+            if (array() !== $field && '' !== $field) {
+                return $option;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Hosts a purchase option may send buyers to. Stripe Payment Links and
+     * Checkout only, over HTTPS; filter `member_library_purchase_checkout_hosts`
+     * to allow another checkout host.
+     */
+    public static function purchase_checkout_hosts() {
+        $hosts = apply_filters('member_library_purchase_checkout_hosts', array('buy.stripe.com', 'checkout.stripe.com'));
+        return array_values(array_filter(array_map('strtolower', array_map('strval', (array) $hosts))));
+    }
+
+    /**
+     * Human-readable reasons an option will not show in the Library; an empty
+     * array means it is complete and exported.
+     */
+    public static function purchase_option_problems(array $option) {
+        $problems = array();
+        if ('' === (string) ($option['name'] ?? '')) {
+            $problems[] = __('a name', 'member-library');
+        }
+        if ('' === (string) ($option['price'] ?? '')) {
+            $problems[] = __('a price', 'member-library');
+        }
+        if ('' === (string) ($option['button_label'] ?? '')) {
+            $problems[] = __('button text', 'member-library');
+        }
+
+        $url = (string) ($option['checkout_url'] ?? '');
+        $parts = '' === $url ? false : wp_parse_url($url);
+        if ('' === $url) {
+            $problems[] = __('a Stripe checkout link', 'member-library');
+        } elseif (
+            !is_array($parts)
+            || 'https' !== strtolower((string) ($parts['scheme'] ?? ''))
+            || !in_array(strtolower((string) ($parts['host'] ?? '')), self::purchase_checkout_hosts(), true)
+        ) {
+            $problems[] = __('a Stripe checkout link (https://buy.stripe.com/… or https://checkout.stripe.com/…)', 'member-library');
+        }
+
+        return $problems;
     }
 
     private static function bounded_plain_text($value, $limit) {
@@ -826,12 +938,14 @@ class MemberLibrary_Content_Model {
         self::register_meta(self::COURSE_POST_TYPE, self::META_SALE_PRICE, 'string', array(__CLASS__, 'sanitize_sale_price'));
         self::register_meta(self::COURSE_POST_TYPE, self::META_PURCHASE_URL, 'string', array(__CLASS__, 'sanitize_purchase_url'));
         self::register_meta(self::COURSE_POST_TYPE, self::META_PURCHASE_BUTTON_LABEL, 'string', array(__CLASS__, 'sanitize_purchase_button_label'));
+        self::register_meta(self::COURSE_POST_TYPE, self::META_PURCHASE_OPTIONS, 'array', array(__CLASS__, 'sanitize_purchase_options'));
         self::register_meta(self::SERIES_POST_TYPE, self::META_SERIES_GROUPS, 'array', array(__CLASS__, 'sanitize_structure_registry'));
         self::register_meta(self::SERIES_POST_TYPE, self::META_AI_ASSISTANT_ENABLED, 'boolean', 'rest_sanitize_boolean');
         self::register_meta(self::SERIES_POST_TYPE, self::META_AI_ASSISTANT_QUESTIONS, 'array', array(__CLASS__, 'sanitize_ai_assistant_questions'));
         self::register_meta(self::SERIES_POST_TYPE, self::META_SALE_PRICE, 'string', array(__CLASS__, 'sanitize_sale_price'));
         self::register_meta(self::SERIES_POST_TYPE, self::META_PURCHASE_URL, 'string', array(__CLASS__, 'sanitize_purchase_url'));
         self::register_meta(self::SERIES_POST_TYPE, self::META_PURCHASE_BUTTON_LABEL, 'string', array(__CLASS__, 'sanitize_purchase_button_label'));
+        self::register_meta(self::SERIES_POST_TYPE, self::META_PURCHASE_OPTIONS, 'array', array(__CLASS__, 'sanitize_purchase_options'));
         self::register_meta(self::ITEM_POST_TYPE, self::META_AVAILABILITY, 'string', array(__CLASS__, 'sanitize_availability'));
         self::register_meta(self::ITEM_POST_TYPE, self::META_RELEASE_AT_GMT, 'string', array(__CLASS__, 'sanitize_release_at_gmt'));
 

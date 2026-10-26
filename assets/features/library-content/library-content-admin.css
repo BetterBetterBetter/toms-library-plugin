@@ -1364,3 +1364,73 @@
     font-size: 18px;
     margin-right: 4px;
 }
+
+/* Purchase options repeater (Course/Series "Purchase options" box) */
+.tsol-library-purchase-option-list {
+    display: grid;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+.tsol-library-purchase-option {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+
+.tsol-library-purchase-option__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f6f7f7;
+    border-bottom: 1px solid #dcdcde;
+}
+
+.tsol-library-purchase-option__status {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.tsol-library-purchase-option__status.is-live {
+    background: #edfaef;
+    color: #00450c;
+}
+
+.tsol-library-purchase-option__status.is-hidden {
+    background: #fcf0f1;
+    color: #8a2424;
+}
+
+.tsol-library-purchase-option__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.tsol-library-purchase-option__fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px 16px;
+    padding: 12px;
+}
+
+.tsol-library-purchase-option__wide {
+    grid-column: 1 / -1;
+}
+
+.tsol-library-purchase-option__fields input[type="text"],
+.tsol-library-purchase-option__fields input[type="url"],
+.tsol-library-purchase-option__fields textarea {
+    width: 100%;
+}
+
+.tsol-library-purchase-option-add {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
