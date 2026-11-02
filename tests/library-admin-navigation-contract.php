@@ -76,6 +76,10 @@ if (!empty($admin_ids)) {
     }
     $assert(preg_match_all('/data-dashboard-state="(live|draft|review|attention|off|ok)"/', $html) >= 5, 'Dashboard cards do not each declare a state.');
     $assert(false !== strpos($html, 'data-dashboard-recent'), 'The Dashboard does not list recently edited Library items.');
+    if (false !== strpos($html, 'tsol-dashboard-recent__meta')) {
+        // A relative "edited … ago" must carry the exact date for hover and machines.
+        $assert(1 === preg_match('/<time datetime="[^"]+" title="[^"]+">edited [^<]+ ago<\/time>/', $html), 'Recently edited items show a relative time without the exact date.');
+    }
     foreach (array('staged', 'Checks passed', 'bootstrapped', 'outbox', 'cursor') as $jargon) {
         $assert(false === stripos($html, $jargon), 'Implementation jargon is shown on the Dashboard: ' . $jargon);
     }

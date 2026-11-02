@@ -1,0 +1,200 @@
+/* Library Guide — layout only. Colours, cards, and status chips are
+   inherited from the shared library-content-admin stylesheet so the guide
+   matches every other Library screen and stays correct in light and dark. */
+
+.tsol-library-guide .tsol-guide-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+    margin-top: 16px;
+}
+
+.tsol-library-guide .tsol-guide-toc {
+    position: sticky;
+    top: 46px;
+    padding: 4px 0;
+}
+
+.tsol-library-guide .tsol-guide-toc__title {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin-bottom: 8px;
+}
+
+.tsol-library-guide .tsol-guide-toc ul {
+    margin: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tsol-library-guide .tsol-guide-toc a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+}
+
+.tsol-library-guide .tsol-guide-toc a:hover,
+.tsol-library-guide .tsol-guide-toc a:focus {
+    background: rgba(127, 127, 127, 0.12);
+    border-left-color: currentColor;
+}
+
+.tsol-library-guide .tsol-guide-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+.tsol-library-guide .tsol-guide-section {
+    scroll-margin-top: 46px;
+    padding: 20px 22px;
+}
+
+.tsol-library-guide .tsol-guide-section h2 {
+    margin-top: 0;
+}
+
+.tsol-library-guide .tsol-guide-section__intro {
+    margin-top: -4px;
+    opacity: 0.8;
+}
+
+/* Mental-model strip: WordPress → MemberPress → Feed → App */
+.tsol-library-guide .tsol-guide-model {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+    margin: 14px 0 4px;
+}
+
+.tsol-library-guide .tsol-guide-model__box {
+    flex: 1 1 150px;
+    min-width: 140px;
+    padding: 12px 14px;
+    border: 1px solid rgba(127, 127, 127, 0.28);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tsol-library-guide .tsol-guide-model__box strong {
+    font-size: 13px;
+}
+
+.tsol-library-guide .tsol-guide-model__box span {
+    font-size: 12px;
+    opacity: 0.75;
+    line-height: 1.45;
+}
+
+.tsol-library-guide .tsol-guide-model__arrow {
+    align-self: center;
+    font-size: 18px;
+    opacity: 0.5;
+}
+
+/* Recipes: native <details>, no JS */
+.tsol-library-guide .tsol-guide-recipe {
+    border: 1px solid rgba(127, 127, 127, 0.24);
+    border-radius: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+.tsol-library-guide .tsol-guide-recipe[open] {
+    border-color: rgba(127, 127, 127, 0.4);
+}
+
+.tsol-library-guide .tsol-guide-recipe summary {
+    cursor: pointer;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    list-style: none;
+}
+
+.tsol-library-guide .tsol-guide-recipe summary::-webkit-details-marker {
+    display: none;
+}
+
+.tsol-library-guide .tsol-guide-recipe summary::before {
+    content: "+";
+    display: inline-flex;
+    width: 18px;
+    justify-content: center;
+    opacity: 0.6;
+    font-weight: 700;
+}
+
+.tsol-library-guide .tsol-guide-recipe[open] summary::before {
+    content: "\2212"; /* minus */
+}
+
+.tsol-library-guide .tsol-guide-recipe__title {
+    flex: 1 1 auto;
+}
+
+.tsol-library-guide .tsol-guide-recipe__chip {
+    flex: 0 0 auto;
+}
+
+.tsol-library-guide .tsol-guide-recipe__body {
+    padding: 2px 16px 16px 44px;
+}
+
+.tsol-library-guide .tsol-guide-recipe__body ol {
+    margin: 8px 0;
+    padding-left: 18px;
+    line-height: 1.6;
+}
+
+.tsol-library-guide .tsol-guide-recipe__tip {
+    margin: 10px 0 2px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(220, 150, 20, 0.12);
+    border: 1px solid rgba(220, 150, 20, 0.35);
+    font-size: 13px;
+}
+
+/* FAQ / troubleshooting lists */
+.tsol-library-guide .tsol-guide-faq {
+    margin: 10px 0 0;
+}
+
+.tsol-library-guide .tsol-guide-faq dt {
+    font-weight: 600;
+    margin-top: 14px;
+}
+
+.tsol-library-guide .tsol-guide-faq dd {
+    margin: 4px 0 0;
+    padding-left: 0;
+}
+
+.tsol-library-guide .tsol-guide-faq dd p {
+    margin: 4px 0;
+    opacity: 0.88;
+}
+
+@media (max-width: 782px) {
+    .tsol-library-guide .tsol-guide-layout {
+        grid-template-columns: 1fr;
+    }
+    .tsol-library-guide .tsol-guide-toc {
+        position: static;
+    }
+}

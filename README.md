@@ -86,6 +86,13 @@ or MemberPress Members screen when Web357 Login as User is active. See
 [`docs/library-access-testing.md`](docs/library-access-testing.md) for the
 operator flow, security boundary, and rollout order.
 
+Non-technical operators get a task-first help screen inside WordPress at
+**Library → Guide & Help**: the mental model, step-by-step recipes for the
+real admin screens, troubleshooting, and how changes reach the member app.
+Each recipe pairs with a recording script in
+[`docs/screencasts/`](docs/screencasts/README.md) so the written steps and the
+screencasts cover the same tasks.
+
 ## Releases
 
 See `RELEASE.md`. CI (`.github/workflows/ci.yml`) lints PHP on every push;

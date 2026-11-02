@@ -323,7 +323,8 @@ class MemberLibrary_Admin_Navigation {
                                     <a href="<?php echo esc_url(get_edit_post_link((int) $post->ID, 'raw')); ?>"><?php echo esc_html(get_the_title($post) ?: __('(untitled)', 'member-library')); ?></a>
                                     <span class="tsol-dashboard-recent__meta">
                                         <span class="tsol-status-chip tsol-status-chip--<?php echo 'publish' === $post->post_status ? 'live' : 'draft'; ?>"><?php echo esc_html('publish' === $post->post_status ? __('Live', 'member-library') : ($status ? $status->label : $post->post_status)); ?></span>
-                                        <?php echo esc_html($type_labels[$post->post_type] ?? $post->post_type); ?> · <?php echo esc_html(sprintf(__('%s ago', 'member-library'), human_time_diff(strtotime($post->post_modified_gmt . ' UTC')))); ?>
+                                        <?php $modified_ts = strtotime($post->post_modified_gmt . ' UTC'); ?>
+                                        <?php echo esc_html($type_labels[$post->post_type] ?? $post->post_type); ?> · <time datetime="<?php echo esc_attr(gmdate('c', $modified_ts)); ?>" title="<?php echo esc_attr(wp_date(get_option('date_format') . ' ' . get_option('time_format'), $modified_ts)); ?>"><?php echo esc_html(sprintf(__('edited %s ago', 'member-library'), human_time_diff($modified_ts))); ?></time>
                                     </span>
                                 </li>
                             <?php endforeach; ?>

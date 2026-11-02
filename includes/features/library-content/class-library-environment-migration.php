@@ -736,9 +736,11 @@ class MemberLibrary_Environment_Migration {
 
     private function export_posts() {
         $records = array();
+        // Auto-drafts are WordPress's unsaved "Add New" placeholders: they never
+        // receive a UUID and WordPress purges them, so they are not content.
         $posts = get_posts(array(
             'post_type' => $this->post_types(),
-            'post_status' => array_values(get_post_stati()),
+            'post_status' => array_values(array_diff(get_post_stati(), array('auto-draft'))),
             'posts_per_page' => -1,
             'orderby' => array('post_type' => 'ASC', 'ID' => 'ASC'),
             'suppress_filters' => true,

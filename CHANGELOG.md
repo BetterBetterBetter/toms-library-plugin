@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 - 2026-11-02
+
+- New in-plugin help screen at **Library → Guide & Help** (capability
+  `edit_pages`): a brand-neutral, task-first guide for non-technical
+  operators — the WordPress/MemberPress/catalogue-feed/app mental model, nine
+  step-by-step recipes for the real admin screens, "make sure it shows in the
+  app" sync checks, troubleshooting, and how plugin updates arrive. Built on
+  the shared admin styling with native collapsible recipes (no JS). Each
+  recipe pairs with a recording script under `docs/screencasts/`.
+- The announcements recipe now matches the Delivery box: announcements are
+  saved as drafts; sending and scheduling are not switched on.
+- The Library dashboard's "edited … ago" times show the exact date and time on
+  hover.
+- Fix: building an environment migration package no longer fails with
+  "missing its immutable UUID" when an unsaved Add New placeholder
+  (auto-draft) exists.
 
 ## 0.14.0 - 2026-10-26
 

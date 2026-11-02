@@ -291,10 +291,10 @@ try {
         MemberLibrary_Content_Admin::NONCE_NAME => wp_create_nonce(MemberLibrary_Content_Admin::NONCE_ACTION),
         MemberLibrary_Content_Admin::PAYLOAD_NAME => array(
             'course_learning_outcomes_present' => '1',
-            'purchase_offer_present' => '1',
-            'sale_price' => '$149 one-time',
-            'purchase_url' => 'https://example.test/checkout/course',
-            'purchase_button_label' => 'Get this course',
+            'purchase_options_present' => '1',
+            'purchase_options' => array(
+                array('name' => 'Lifetime access', 'price' => '$149', 'price_note' => 'one-time', 'includes' => 'Lifetime access to this course', 'button_label' => 'Get this course', 'button_price' => '', 'checkout_url' => 'https://example.test/checkout/course'),
+            ),
             'learning_outcomes' => array(
                 array('text' => 'Build an independent training plan.'),
                 array('text' => ''),
@@ -314,9 +314,13 @@ try {
         array('Build an independent training plan.', 'Evaluate a gym programme.') === $course_learning_outcomes,
         'Course learning outcomes were not cleaned, de-duplicated, and saved in editorial order.'
     );
-    $assert('$149 one-time' === get_post_meta($course_fixture_id, MemberLibrary_Content_Model::META_SALE_PRICE, true), 'Course sale price was not saved.');
-    $assert('https://example.test/checkout/course' === get_post_meta($course_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_URL, true), 'Course purchase URL was not saved.');
-    $assert('Get this course' === get_post_meta($course_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL, true), 'Course purchase button label was not saved.');
+    // Purchase data is owned by the options repeater (0.14.0); the legacy single offer is retired.
+    $course_options = get_post_meta($course_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_OPTIONS, true);
+    $assert(
+        MemberLibrary_Content_Model::sanitize_purchase_options($_POST[MemberLibrary_Content_Admin::PAYLOAD_NAME]['purchase_options']) === $course_options,
+        'Course purchase options were not sanitized and saved.'
+    );
+    $assert('' === get_post_meta($course_fixture_id, MemberLibrary_Content_Model::META_SALE_PRICE, true), 'A legacy Course sale price survived a purchase-options save.');
     $_POST = array(
         MemberLibrary_Content_Admin::NONCE_NAME => wp_create_nonce(MemberLibrary_Content_Admin::NONCE_ACTION),
         MemberLibrary_Content_Admin::PAYLOAD_NAME => array(
@@ -435,16 +439,16 @@ try {
     $_POST = array(
         MemberLibrary_Content_Admin::NONCE_NAME => wp_create_nonce(MemberLibrary_Content_Admin::NONCE_ACTION),
         MemberLibrary_Content_Admin::PAYLOAD_NAME => array(
-            'purchase_offer_present' => '1',
-            'sale_price' => '<b>$29/month</b>',
-            'purchase_url' => 'javascript:alert(1)',
-            'purchase_button_label' => 'Join the series',
+            'purchase_options_present' => '1',
+            'purchase_options' => array(
+                array('name' => '<b>Monthly</b>', 'price' => '$29', 'price_note' => 'per month', 'includes' => 'Every episode', 'button_label' => 'Join the series', 'button_price' => '', 'checkout_url' => 'javascript:alert(1)'),
+            ),
         ),
     );
     $editor->save_post($series_fixture_id, get_post($series_fixture_id));
-    $assert('$29/month' === get_post_meta($series_fixture_id, MemberLibrary_Content_Model::META_SALE_PRICE, true), 'Series sale price was not sanitized and saved.');
-    $assert('' === get_post_meta($series_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_URL, true), 'An unsafe Series purchase URL was saved.');
-    $assert('Join the series' === get_post_meta($series_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_BUTTON_LABEL, true), 'Series purchase button label was not saved.');
+    $series_options = (array) get_post_meta($series_fixture_id, MemberLibrary_Content_Model::META_PURCHASE_OPTIONS, true);
+    $assert('Monthly' === (string) ($series_options[0]['name'] ?? ''), 'Series purchase option was not sanitized and saved.');
+    $assert(false === stripos((string) ($series_options[0]['checkout_url'] ?? ''), 'javascript'), 'An unsafe Series checkout URL was saved.');
     delete_post_meta($fixture_id, MemberLibrary_Content_Model::META_COURSE_ID);
     update_post_meta($fixture_id, MemberLibrary_Content_Model::META_SERIES_ID, $series_fixture_id);
     ob_start();

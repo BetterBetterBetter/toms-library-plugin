@@ -24,7 +24,27 @@ $assert(false !== has_action('wp_ajax_tsol_library_migration_prepare_attachments
 $assert(class_exists('ZipArchive'), 'The PHP Zip extension required for complete migration packages is unavailable.');
 
 $migration = new MemberLibrary_Environment_Migration();
-$package = $migration->build_package();
+
+// An unsaved "Add New" placeholder must never block an export: auto-drafts have
+// no UUID and are not content.
+$auto_draft_id = wp_insert_post(array(
+    'post_type' => MemberLibrary_Content_Model::COURSE_POST_TYPE,
+    'post_status' => 'auto-draft',
+    'post_title' => 'Auto Draft',
+), true);
+$assert(!is_wp_error($auto_draft_id), 'Could not provision an auto-draft Library course.');
+$export_error = null;
+try {
+    $package = $migration->build_package();
+} catch (Throwable $error) {
+    $export_error = $error;
+}
+if (!is_wp_error($auto_draft_id)) {
+    wp_delete_post((int) $auto_draft_id, true);
+}
+if ($export_error) {
+    WP_CLI::error('An auto-draft Library record blocked the migration export: ' . $export_error->getMessage());
+}
 $json = $migration->encode($package);
 $decoded = $migration->decode($json);
 $preview = $migration->preview($decoded);

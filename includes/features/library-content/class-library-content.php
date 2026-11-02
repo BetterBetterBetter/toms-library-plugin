@@ -18,6 +18,7 @@ class MemberLibrary_Content implements MemberLibrary_Feature {
     private $collection_admin = null;
     private $homepage_curation = null;
     private $environment_migration_admin = null;
+    private $guide_admin = null;
     private $navigation = null;
     private $speaker_admin = null;
     private $structure_admin = null;
@@ -58,6 +59,8 @@ class MemberLibrary_Content implements MemberLibrary_Feature {
             $this->speaker_admin->init();
             $this->structure_admin = new MemberLibrary_Structure_Admin();
             $this->structure_admin->init();
+            $this->guide_admin = new MemberLibrary_Guide_Admin();
+            $this->guide_admin->init();
         }
     }
 
