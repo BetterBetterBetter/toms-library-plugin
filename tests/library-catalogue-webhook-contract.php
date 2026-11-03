@@ -27,6 +27,13 @@ global $wpdb;
 $table = MemberLibrary_Catalogue_Webhook::table();
 $assert($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table, 'The durable webhook outbox table is missing.');
 
+// Contracts that save or delete posts each queue a real outbox row, and under
+// WP-CLI nothing delivers it. Set those rows aside for the isolated delivery
+// checks and restore them afterwards instead of requiring a hand-drained table.
+$set_aside_rows = (array) $wpdb->get_results('SELECT * FROM ' . $table, ARRAY_A); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Static plugin-owned table name.
+foreach ($set_aside_rows as $set_aside_row) {
+    $wpdb->delete($table, array('delivery_id' => $set_aside_row['delivery_id']), array('%s'));
+}
 $existing_rows = (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . $table); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Static plugin-owned table name.
 $existing_schedule = wp_next_scheduled(MemberLibrary_Catalogue_Webhook::CRON_HOOK);
 $existing_watchdog = wp_next_scheduled(MemberLibrary_Catalogue_Webhook::WATCHDOG_HOOK);
@@ -164,6 +171,9 @@ if (false === $existing_watchdog) {
 $wpdb->delete($table, array('delivery_id' => $delivery_id), array('%s'));
 if (isset($retry_delivery_id)) {
     $wpdb->delete($table, array('delivery_id' => $retry_delivery_id), array('%s'));
+}
+foreach ($set_aside_rows as $set_aside_row) {
+    $wpdb->replace($table, $set_aside_row);
 }
 if ($missing_option_marker === $existing_last_delivery) {
     delete_option(MemberLibrary_Catalogue_Webhook::LAST_DELIVERY_OPTION);
