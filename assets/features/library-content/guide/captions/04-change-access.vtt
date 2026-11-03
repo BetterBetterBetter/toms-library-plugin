@@ -1,0 +1,61 @@
+WEBVTT
+
+1
+00:00:02.053 --> 00:00:04.705
+Here's the part people get wrong most often.
+
+2
+00:00:04.705 --> 00:00:09.466
+You don't set access on the course itself. This Library access box is a mirror.
+
+3
+00:00:09.466 --> 00:00:11.635
+It reports what MemberPress decides.
+
+4
+00:00:13.210 --> 00:00:17.994
+Access is managed under Library, Access Groups. Live is what members have now.
+
+5
+00:00:17.994 --> 00:00:21.122
+Draft is where your changes wait until you publish.
+
+6
+00:00:27.797 --> 00:00:30.135
+An Access Group is a package of content.
+
+7
+00:00:30.135 --> 00:00:33.934
+Open a group, and under What this group unlocks, tick the course.
+
+8
+00:00:40.030 --> 00:00:44.752
+Each group lists the memberships that include it. Save draft keeps your change.
+
+9
+00:00:44.752 --> 00:00:46.843
+Saving never changes member access.
+
+10
+00:00:48.776 --> 00:00:54.033
+You can also tick groups from a MemberPress membership, in its Library Access Groups box.
+
+11
+00:00:54.033 --> 00:00:55.923
+That saves to the draft as well.
+
+12
+00:00:58.775 --> 00:01:03.410
+When you're ready, preview the check first. Publishing checks every current member.
+
+13
+00:01:03.410 --> 00:01:07.597
+If anyone would lose access, nothing is published, and you see exactly who.
+
+14
+00:01:10.419 --> 00:01:15.478
+Once it's live, the course's access box reads Protected by MemberPress and names the group.
+
+15
+00:01:15.478 --> 00:01:17.145
+That's how you know it worked.

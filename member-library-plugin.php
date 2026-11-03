@@ -3,7 +3,7 @@
  * Plugin Name: Member Library Platform
  * Plugin URI: https://github.com/BetterBetterBetter/toms-library-plugin
  * Description: Member library platform for WordPress — courses, series, speakers and announcements, with MemberPress-driven access and a catalogue feed for a companion member-facing app.
- * Version: 0.15.0
+ * Version: 0.16.0
  * Author: Thrice Agency
  * License: GPL v2 or later
  * Text Domain: member-library
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants.
-define('MEMBER_LIBRARY_PLUGIN_VERSION', '0.15.0');
+define('MEMBER_LIBRARY_PLUGIN_VERSION', '0.16.0');
 define('MEMBER_LIBRARY_PLUGIN_FILE', __FILE__);
 define('MEMBER_LIBRARY_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('MEMBER_LIBRARY_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -92,6 +92,7 @@ if (defined('WP_CLI') && WP_CLI) {
     require_once MEMBER_LIBRARY_PLUGIN_DIR . 'includes/migrations/liberty-learndash-import/class-liberty-learndash-import.php';
     require_once MEMBER_LIBRARY_PLUGIN_DIR . 'includes/migrations/liberty-learndash-import/class-liberty-learndash-import-cli.php';
     WP_CLI::add_command(Liberty_Classroom_LearnDash_Import_CLI::COMMAND, 'Liberty_Classroom_LearnDash_Import_CLI');
+    WP_CLI::add_command('member-library guide-videos import', array('MemberLibrary_Guide_Admin', 'cli_import_videos'));
 }
 
 require_once MEMBER_LIBRARY_PLUGIN_DIR . 'includes/class-plugin.php';

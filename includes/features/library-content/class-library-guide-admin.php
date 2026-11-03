@@ -25,9 +25,16 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
     /** @var string */
     private $page_hook = '';
 
+    /** Attachment meta key that marks a Media Library video as a guide walkthrough. */
+    const VIDEO_META = '_member_library_guide_clip';
+
+    /** @var string */
+    private $assets_url = '';
+
     public function init() {
         add_action('admin_menu', array($this, 'add_menu_page'), 30);
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
+        add_action('current_screen', array($this, 'quiet_notices'));
     }
 
     public function add_menu_page() {
@@ -39,6 +46,20 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             self::PAGE_SLUG,
             array($this, 'render')
         );
+    }
+
+    /**
+     * This is a reading page for non-technical editors; a stack of unrelated
+     * plugin nags above it buries the guide. Notices still show on every
+     * other admin screen, so nothing is lost by quieting them here.
+     */
+    public function quiet_notices($screen) {
+        if ('' === $this->page_hook || !is_object($screen) || $screen->id !== $this->page_hook) {
+            return;
+        }
+        foreach (array('admin_notices', 'all_admin_notices', 'network_admin_notices', 'user_admin_notices') as $hook) {
+            remove_all_actions($hook);
+        }
     }
 
     public function enqueue_assets($hook) {
@@ -54,6 +75,13 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             array('tsol-library-content-admin'),
             MEMBER_LIBRARY_PLUGIN_VERSION
         );
+        wp_enqueue_script(
+            'tsol-library-guide-admin',
+            MEMBER_LIBRARY_PLUGIN_URL . 'assets/features/library-content/library-guide-admin.js',
+            array(),
+            MEMBER_LIBRARY_PLUGIN_VERSION,
+            true
+        );
     }
 
     public function render() {
@@ -61,107 +89,414 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             return;
         }
 
+        $this->assets_url = MEMBER_LIBRARY_PLUGIN_URL . 'assets/features/library-content/guide/';
         $app_name = MemberLibrary_Brand::app_name();
         $sections = $this->sections($app_name);
+        $by_id = array();
+        foreach ($sections as $section) {
+            $by_id[$section['id']] = $section;
+        }
+        $tasks = $by_id['everyday-tasks']['recipes'];
+        $videos = $this->videos();
+        $seconds = 0;
+        foreach ($tasks as $task) {
+            $seconds += (int) $task['seconds'];
+        }
         ?>
         <div class="wrap tsol-library-admin-page tsol-library-guide">
-            <h1><?php esc_html_e('Library Guide &amp; Help', 'member-library'); ?></h1>
-            <p class="tsol-library-admin-page__lead">
-                <?php esc_html_e('Plain-language, step-by-step answers for managing the member Library. Start with “How the Library works”, then jump to the task you need.', 'member-library'); ?>
-            </p>
-
-            <div class="tsol-guide-layout">
-                <nav class="tsol-guide-toc" aria-label="<?php esc_attr_e('Guide contents', 'member-library'); ?>">
-                    <strong class="tsol-guide-toc__title"><?php esc_html_e('On this page', 'member-library'); ?></strong>
-                    <ul>
-                        <?php foreach ($sections as $section) : ?>
-                            <li><a href="#<?php echo esc_attr($section['id']); ?>"><?php echo esc_html($section['title']); ?></a></li>
-                        <?php endforeach; ?>
+            <header class="tsol-guide-hero">
+                <div class="tsol-guide-hero__text">
+                    <p class="tsol-guide-hero__eyebrow"><span class="dashicons dashicons-book-alt" aria-hidden="true"></span><?php esc_html_e('Library help centre', 'member-library'); ?></p>
+                    <h1><?php esc_html_e('Guide &amp; Help', 'member-library'); ?></h1>
+                    <p class="tsol-guide-hero__lead"><?php esc_html_e('Short narrated videos and plain-language steps for everything you do in the member Library.', 'member-library'); ?></p>
+                    <ul class="tsol-guide-hero__facts">
+                        <li><span class="dashicons dashicons-video-alt3" aria-hidden="true"></span><?php printf(esc_html__('%d walkthroughs', 'member-library'), count($tasks)); ?></li>
+                        <li><span class="dashicons dashicons-clock" aria-hidden="true"></span><?php printf(esc_html__('About %d minutes', 'member-library'), (int) round($seconds / 60)); ?></li>
+                        <li><span class="dashicons dashicons-format-chat" aria-hidden="true"></span><?php esc_html_e('Captions &amp; transcripts', 'member-library'); ?></li>
                     </ul>
+                </div>
+                <div class="tsol-guide-search" role="search">
+                    <label for="tsol-guide-search"><?php esc_html_e('What do you want to do?', 'member-library'); ?></label>
+                    <div class="tsol-guide-search__field">
+                        <span class="dashicons dashicons-search" aria-hidden="true"></span>
+                        <input type="search" id="tsol-guide-search" placeholder="<?php esc_attr_e('Try “add a course” or “access”', 'member-library'); ?>" autocomplete="off">
+                    </div>
+                    <p class="tsol-guide-quick">
+                        <span><?php esc_html_e('Popular:', 'member-library'); ?></span>
+                        <?php foreach (array(0 => __('Add a course', 'member-library'), 3 => __('Change access', 'member-library'), 8 => __('Unpublish', 'member-library')) as $i => $label) : ?>
+                            <?php if (isset($tasks[$i])) : ?><a href="#task-<?php echo esc_attr($tasks[$i]['clip']); ?>" data-guide-open="<?php echo esc_attr($tasks[$i]['clip']); ?>"><?php echo esc_html($label); ?></a><?php endif; ?>
+                        <?php endforeach; ?>
+                    </p>
+                </div>
+            </header>
+
+            <nav class="tsol-guide-jump" aria-label="<?php esc_attr_e('Guide contents', 'member-library'); ?>">
+                <?php
+                $jump_icons = array('screencasts' => 'dashicons-video-alt3', 'how-it-works' => 'dashicons-networking', 'troubleshooting' => 'dashicons-sos', 'make-it-show' => 'dashicons-yes-alt', 'updating' => 'dashicons-update-alt');
+                foreach ($jump_icons as $id => $icon) :
+                    ?>
+                    <a href="#<?php echo esc_attr($id); ?>"><span class="dashicons <?php echo esc_attr($icon); ?>" aria-hidden="true"></span><?php echo esc_html($by_id[$id]['title']); ?></a>
+                <?php endforeach; ?>
+            </nav>
+
+            <section id="screencasts" class="tsol-guide-section tsol-guide-theatre">
+                <div class="tsol-guide-theatre__grid">
+                    <div id="everyday-tasks" class="tsol-guide-stage" role="region" aria-label="<?php echo esc_attr($by_id['everyday-tasks']['title']); ?>">
+                        <h2 class="screen-reader-text"><?php echo esc_html($by_id['screencasts']['title']); ?></h2>
+                        <?php foreach ($tasks as $index => $task) : ?>
+                            <?php $this->render_task($task, $index, count($tasks), isset($videos[$task['clip']]) ? $videos[$task['clip']] : '', $tasks); ?>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <aside class="tsol-guide-playlist" aria-label="<?php esc_attr_e('All walkthroughs', 'member-library'); ?>">
+                        <div class="tsol-guide-playlist__head">
+                            <div>
+                                <h3><?php echo esc_html($by_id['screencasts']['title']); ?></h3>
+                                <p><?php printf(esc_html__('%1$d videos · about %2$d min', 'member-library'), count($tasks), (int) round($seconds / 60)); ?></p>
+                            </div>
+                            <span class="tsol-guide-playlist__progress" data-guide-progress hidden>
+                                <span data-guide-progress-text></span>
+                                <span class="tsol-guide-playlist__bar"><span data-guide-progress-bar></span></span>
+                            </span>
+                        </div>
+                        <ol class="tsol-guide-playlist__list">
+                            <?php foreach ($tasks as $index => $task) : ?>
+                                <li class="tsol-guide-playlist__item" data-guide-filter="<?php echo esc_attr($this->keywords($task)); ?>" data-clip="<?php echo esc_attr($task['clip']); ?>">
+                                    <a href="#task-<?php echo esc_attr($task['clip']); ?>" data-guide-open="<?php echo esc_attr($task['clip']); ?>" data-guide-autoplay>
+                                        <span class="tsol-guide-playlist__index" aria-hidden="true"><span class="tsol-guide-playlist__n"><?php echo (int) ($index + 1); ?></span><span class="dashicons dashicons-controls-play"></span><span class="dashicons dashicons-yes"></span></span>
+                                        <span class="tsol-guide-playlist__text">
+                                            <span class="tsol-guide-playlist__title"><?php echo esc_html($task['title']); ?></span>
+                                            <span class="tsol-guide-playlist__summary"><?php echo esc_html($task['summary']); ?></span>
+                                            <span class="tsol-guide-playlist__state">
+                                                <span class="tsol-guide-playlist__state--now"><?php esc_html_e('Now playing', 'member-library'); ?></span>
+                                                <span class="tsol-guide-playlist__state--done"><?php esc_html_e('Watched', 'member-library'); ?></span>
+                                            </span>
+                                        </span>
+                                        <span class="tsol-guide-playlist__time"><?php echo esc_html($this->clock($task['seconds'])); ?></span>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ol>
+                        <p class="tsol-guide-search__empty" hidden><span class="dashicons dashicons-search" aria-hidden="true"></span><?php esc_html_e('No walkthrough matches that search. Try one word, such as “course”, “access” or “homepage”.', 'member-library'); ?></p>
+                        <p class="tsol-guide-player-note"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span><?php echo esc_html($by_id['screencasts']['intro']); ?></p>
+                    </aside>
+                </div>
+                <?php if (count($videos) < count($tasks) && current_user_can('manage_options')) : ?>
+                    <p class="tsol-guide-gallery__admin">
+                        <?php
+                        printf(
+                            /* translators: 1: installed count, 2: total, 3: WP-CLI command. */
+                            esc_html__('Administrators: %1$d of %2$d videos are installed on this site. Install the rest into the Media Library with %3$s.', 'member-library'),
+                            count($videos),
+                            count($tasks),
+                            '<code>wp member-library guide-videos import &lt;folder&gt;</code>'
+                        );
+                        ?>
+                    </p>
+                <?php endif; ?>
+            </section>
+
+            <?php $this->render_overview($by_id['how-it-works']); ?>
+
+            <div class="tsol-guide-help-grid">
+                <div class="tsol-guide-help-col">
+                    <?php $this->render_faq($by_id['troubleshooting']); ?>
+                </div>
+                <div class="tsol-guide-help-col">
+                    <?php $this->render_faq($by_id['make-it-show']); ?>
+                    <?php $this->render_faq($by_id['updating']); ?>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    private function render_overview(array $section) {
+        ?>
+        <section id="<?php echo esc_attr($section['id']); ?>" class="tsol-guide-section tsol-guide-overview">
+            <div class="tsol-guide-section__head">
+                <h2><?php echo esc_html($section['title']); ?></h2>
+                <p><?php echo esc_html($section['intro']); ?></p>
+            </div>
+            <ol class="tsol-guide-flow">
+                <?php foreach ($section['model'] as $index => $box) : ?>
+                    <li class="tsol-guide-flow__step<?php echo 0 === $index ? ' is-you' : ''; ?>">
+                        <span class="tsol-guide-flow__icon dashicons <?php echo esc_attr($box['icon']); ?>" aria-hidden="true"></span>
+                        <strong><?php echo esc_html($box['name']); ?></strong>
+                        <span><?php echo esc_html($box['role']); ?></span>
+                        <?php if (0 === $index) : ?><em class="tsol-guide-flow__badge"><?php esc_html_e('You work here', 'member-library'); ?></em><?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+            <div class="tsol-guide-rules">
+                <?php foreach ($section['items'] as $index => $item) : ?>
+                    <div class="tsol-guide-rule<?php echo 0 === $index ? ' tsol-guide-rule--key' : ''; ?>">
+                        <span class="dashicons <?php echo 0 === $index ? 'dashicons-lock' : 'dashicons-wordpress'; ?>" aria-hidden="true"></span>
+                        <div>
+                            <h3><?php echo esc_html($item['q']); ?></h3>
+                            <?php foreach ($item['a'] as $line) : ?>
+                                <p><?php echo $this->rich($line); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in rich(). ?></p>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        <?php
+    }
+
+    private function render_task(array $task, $index, $total, $video_url, array $tasks) {
+        $clip = $task['clip'];
+        $cues = $this->cues($clip);
+        $poster = $this->assets_url . 'posters/' . $clip . '.jpg';
+        $next = $index + 1 < $total ? $tasks[$index + 1] : null;
+        $prev = $index > 0 ? $tasks[$index - 1] : null;
+        ?>
+        <article id="task-<?php echo esc_attr($clip); ?>" class="tsol-guide-task" data-guide-task="<?php echo esc_attr($clip); ?>" data-script="<?php echo esc_attr($task['screencast']); ?>" aria-labelledby="task-<?php echo esc_attr($clip); ?>-title">
+            <div class="tsol-guide-task__watch">
+                <?php if ('' !== $video_url) : ?>
+                    <video class="tsol-guide-video" controls preload="metadata" playsinline poster="<?php echo esc_url($poster); ?>">
+                        <source src="<?php echo esc_url($video_url); ?>" type="video/mp4">
+                        <track kind="captions" srclang="en" label="<?php esc_attr_e('English', 'member-library'); ?>" src="<?php echo esc_url($this->assets_url . 'captions/' . $clip . '.vtt'); ?>" default>
+                    </video>
+                    <button type="button" class="tsol-guide-cover" data-guide-play hidden aria-label="<?php echo esc_attr(sprintf(__('Play the walkthrough: %1$s (%2$s)', 'member-library'), $task['title'], $this->clock($task['seconds']))); ?>">
+                        <img src="<?php echo esc_url($poster); ?>" alt="" loading="lazy" width="1280" height="800">
+                        <span class="tsol-guide-cover__play" aria-hidden="true"><span class="dashicons dashicons-controls-play"></span><span class="tsol-guide-cover__label"><?php echo esc_html(sprintf(__('Play · %s', 'member-library'), $this->clock($task['seconds']))); ?></span></span>
+                    </button>
+                    <div class="tsol-guide-endcard" data-guide-endcard hidden>
+                        <p class="tsol-guide-endcard__done"><span class="dashicons dashicons-yes-alt" aria-hidden="true"></span><?php esc_html_e('Nice — that’s this walkthrough done.', 'member-library'); ?></p>
+                        <div class="tsol-guide-endcard__actions">
+                            <button type="button" class="tsol-guide-endcard__replay" data-guide-replay><span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span><?php esc_html_e('Watch again', 'member-library'); ?></button>
+                            <?php if ($next) : ?>
+                                <a class="tsol-guide-endcard__next" href="#task-<?php echo esc_attr($next['clip']); ?>" data-guide-open="<?php echo esc_attr($next['clip']); ?>" data-guide-autoplay><small><?php esc_html_e('Up next', 'member-library'); ?></small><?php echo esc_html($next['title']); ?><span class="dashicons dashicons-arrow-right-alt" aria-hidden="true"></span></a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php else : ?>
+                    <div class="tsol-guide-video tsol-guide-video--missing">
+                        <img src="<?php echo esc_url($poster); ?>" alt="" loading="lazy">
+                        <p><span class="dashicons dashicons-video-alt3" aria-hidden="true"></span><?php esc_html_e('This video has not been installed on this site yet. The written steps below cover the same task.', 'member-library'); ?></p>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <header class="tsol-guide-task__head">
+                <div class="tsol-guide-task__heading">
+                    <p class="tsol-guide-task__meta">
+                        <span class="tsol-guide-task__num"><?php echo esc_html(sprintf(__('Walkthrough %1$d of %2$d', 'member-library'), $index + 1, $total)); ?></span>
+                        <span><span class="dashicons dashicons-clock" aria-hidden="true"></span><?php echo esc_html($this->clock($task['seconds'])); ?></span>
+                        <span><span class="dashicons dashicons-editor-ol" aria-hidden="true"></span><?php echo esc_html(sprintf(_n('%d step', '%d steps', count($task['steps']), 'member-library'), count($task['steps']))); ?></span>
+                    </p>
+                    <h3 id="task-<?php echo esc_attr($clip); ?>-title"><?php echo esc_html($task['title']); ?></h3>
+                    <p class="tsol-guide-task__intro"><?php echo !empty($task['intro']) ? $this->rich($task['intro']) : esc_html($task['summary']); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
+                </div>
+                <nav class="tsol-guide-task__nav" aria-label="<?php esc_attr_e('Other walkthroughs', 'member-library'); ?>">
+                    <?php if ($prev) : ?>
+                        <a class="tsol-guide-task__step tsol-guide-task__step--prev" href="#task-<?php echo esc_attr($prev['clip']); ?>" data-guide-open="<?php echo esc_attr($prev['clip']); ?>" title="<?php echo esc_attr($prev['title']); ?>"><span class="dashicons dashicons-arrow-left-alt2" aria-hidden="true"></span><span><?php esc_html_e('Previous', 'member-library'); ?></span></a>
+                    <?php endif; ?>
+                    <?php if ($next) : ?>
+                        <a class="tsol-guide-task__step tsol-guide-task__step--next" href="#task-<?php echo esc_attr($next['clip']); ?>" data-guide-open="<?php echo esc_attr($next['clip']); ?>" title="<?php echo esc_attr($next['title']); ?>"><span><?php esc_html_e('Next video', 'member-library'); ?></span><span class="dashicons dashicons-arrow-right-alt2" aria-hidden="true"></span></a>
+                    <?php endif; ?>
                 </nav>
+            </header>
 
-                <div class="tsol-guide-body">
-                    <?php foreach ($sections as $section) : ?>
-                        <section id="<?php echo esc_attr($section['id']); ?>" class="card tsol-guide-section">
-                            <h2><?php echo esc_html($section['title']); ?></h2>
-                            <?php if (!empty($section['intro'])) : ?>
-                                <p class="tsol-guide-section__intro"><?php echo esc_html($section['intro']); ?></p>
-                            <?php endif; ?>
-
-                            <?php if (!empty($section['model'])) : ?>
-                                <?php $this->render_model($section['model']); ?>
-                            <?php endif; ?>
-
-                            <?php if (!empty($section['recipes'])) : ?>
-                                <?php foreach ($section['recipes'] as $recipe) : ?>
-                                    <?php $this->render_recipe($recipe); ?>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-
-                            <?php if (!empty($section['items'])) : ?>
-                                <dl class="tsol-guide-faq">
-                                    <?php foreach ($section['items'] as $item) : ?>
-                                        <dt><?php echo esc_html($item['q']); ?></dt>
-                                        <dd>
-                                            <?php foreach ($item['a'] as $line) : ?>
-                                                <p><?php echo esc_html($line); ?></p>
-                                            <?php endforeach; ?>
-                                            <?php if (!empty($item['link'])) : ?>
-                                                <p><a class="button button-small" href="<?php echo esc_url($item['link']['url']); ?>"><?php echo esc_html($item['link']['label']); ?></a></p>
-                                            <?php endif; ?>
-                                        </dd>
-                                    <?php endforeach; ?>
-                                </dl>
-                            <?php endif; ?>
-                        </section>
-                    <?php endforeach; ?>
+            <?php if (!empty($task['tip'])) : ?>
+                <div class="tsol-guide-tip">
+                    <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                    <p><strong><?php esc_html_e('Watch out', 'member-library'); ?></strong> <?php echo $this->rich($task['tip']); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
                 </div>
+            <?php endif; ?>
+
+            <div class="tsol-guide-task__body">
+                <div class="tsol-guide-tabs" role="tablist" aria-label="<?php esc_attr_e('Steps or narration', 'member-library'); ?>" hidden>
+                    <button type="button" role="tab" id="tab-steps-<?php echo esc_attr($clip); ?>" aria-controls="panel-steps-<?php echo esc_attr($clip); ?>" aria-selected="true"><span class="dashicons dashicons-editor-ol" aria-hidden="true"></span><?php esc_html_e('Step by step', 'member-library'); ?></button>
+                    <?php if (!empty($cues)) : ?>
+                        <button type="button" role="tab" id="tab-script-<?php echo esc_attr($clip); ?>" aria-controls="panel-script-<?php echo esc_attr($clip); ?>" aria-selected="false" tabindex="-1"><span class="dashicons dashicons-text" aria-hidden="true"></span><?php esc_html_e('Transcript', 'member-library'); ?></button>
+                    <?php endif; ?>
+                </div>
+
+                <div class="tsol-guide-panel" role="tabpanel" id="panel-steps-<?php echo esc_attr($clip); ?>" aria-labelledby="tab-steps-<?php echo esc_attr($clip); ?>">
+                    <h4 class="tsol-guide-panel__title"><?php esc_html_e('Step by step', 'member-library'); ?></h4>
+                    <ol class="tsol-guide-steps">
+                        <?php foreach ($task['steps'] as $step) : ?>
+                            <li><?php echo $this->rich($step); // phpcs:ignore WordPress.Security.EscapeOutput ?></li>
+                        <?php endforeach; ?>
+                    </ol>
+                </div>
+
+                <?php if (!empty($cues)) : ?>
+                    <div class="tsol-guide-panel" role="tabpanel" id="panel-script-<?php echo esc_attr($clip); ?>" aria-labelledby="tab-script-<?php echo esc_attr($clip); ?>">
+                        <h4 class="tsol-guide-panel__title"><?php esc_html_e('Transcript', 'member-library'); ?></h4>
+                        <?php if ('' !== $video_url) : ?><p class="tsol-guide-panel__hint"><?php esc_html_e('Click any line to jump the video to that moment.', 'member-library'); ?></p><?php endif; ?>
+                        <ol class="tsol-guide-transcript">
+                            <?php foreach ($cues as $cue) : ?>
+                                <li><button type="button" class="tsol-guide-transcript__cue" data-seek="<?php echo esc_attr(number_format($cue['at'], 2, '.', '')); ?>"<?php disabled('', $video_url); ?>><span class="tsol-guide-transcript__at"><?php echo esc_html($this->clock($cue['at'])); ?></span> <span><?php echo esc_html($cue['text']); ?></span></button></li>
+                            <?php endforeach; ?>
+                        </ol>
+                    </div>
+                <?php endif; ?>
             </div>
-        </div>
+        </article>
         <?php
     }
 
-    private function render_model(array $model) {
+    private function render_faq(array $section) {
         ?>
-        <div class="tsol-guide-model">
-            <?php foreach ($model as $index => $box) : ?>
-                <?php if ($index > 0) : ?><span class="tsol-guide-model__arrow" aria-hidden="true">→</span><?php endif; ?>
-                <div class="tsol-guide-model__box">
-                    <strong><?php echo esc_html($box['name']); ?></strong>
-                    <span><?php echo esc_html($box['role']); ?></span>
-                </div>
+        <section id="<?php echo esc_attr($section['id']); ?>" class="tsol-guide-section tsol-guide-faq" data-guide-faq>
+            <div class="tsol-guide-section__head">
+                <h2><span class="dashicons <?php echo esc_attr($section['icon']); ?>" aria-hidden="true"></span><?php echo esc_html($section['title']); ?></h2>
+                <?php if (!empty($section['intro'])) : ?><p><?php echo esc_html($section['intro']); ?></p><?php endif; ?>
+            </div>
+            <?php foreach ($section['items'] as $item) : ?>
+                <details class="tsol-guide-faq__item" data-guide-filter="<?php echo esc_attr(strtolower($item['q'] . ' ' . implode(' ', $item['a']))); ?>">
+                    <summary><?php echo esc_html($item['q']); ?></summary>
+                    <div class="tsol-guide-faq__answer">
+                        <?php foreach ($item['a'] as $line) : ?>
+                            <p><?php echo $this->rich($line); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
+                        <?php endforeach; ?>
+                        <?php if (!empty($item['link'])) : ?>
+                            <p><a class="button" href="<?php echo esc_url($item['link']['url']); ?>"><?php echo esc_html($item['link']['label']); ?></a></p>
+                        <?php endif; ?>
+                    </div>
+                </details>
             <?php endforeach; ?>
-        </div>
+        </section>
         <?php
     }
 
-    private function render_recipe(array $recipe) {
-        ?>
-        <details class="tsol-guide-recipe">
-            <summary>
-                <span class="tsol-guide-recipe__title"><?php echo esc_html($recipe['title']); ?></span>
-                <?php if (!empty($recipe['screencast'])) : ?>
-                    <span class="tsol-status-chip tsol-status-chip--good tsol-guide-recipe__chip"><?php esc_html_e('Screencast available', 'member-library'); ?></span>
-                <?php endif; ?>
-            </summary>
-            <div class="tsol-guide-recipe__body">
-                <?php if (!empty($recipe['intro'])) : ?>
-                    <p><?php echo esc_html($recipe['intro']); ?></p>
-                <?php endif; ?>
-                <ol>
-                    <?php foreach ($recipe['steps'] as $step) : ?>
-                        <li><?php echo esc_html($step); ?></li>
-                    <?php endforeach; ?>
-                </ol>
-                <?php if (!empty($recipe['tip'])) : ?>
-                    <p class="tsol-guide-recipe__tip"><strong><?php esc_html_e('Watch out:', 'member-library'); ?></strong> <?php echo esc_html($recipe['tip']); ?></p>
-                <?php endif; ?>
-                <?php if (!empty($recipe['screencast'])) : ?>
-                    <p class="description"><?php printf(esc_html__('Screencast script: %s', 'member-library'), esc_html($recipe['screencast'])); ?></p>
-                <?php endif; ?>
-            </div>
-        </details>
-        <?php
+    /**
+     * Escape a line of guide copy, then highlight menu paths ("Library → Courses")
+     * and the names of on-screen boxes in “quotes” so they are easy to scan.
+     */
+    private function rich($text) {
+        $html = esc_html($text);
+        $html = preg_replace(
+            '/\b((?:Library|MemberPress|Plugins)(?: → [A-Z][\w-]*(?: [A-Z][\w-]*)*)+)/u',
+            '<span class="tsol-guide-path">$1</span>',
+            $html
+        );
+        return (string) preg_replace('/“([^”]{2,60})”/u', '<span class="tsol-guide-ui">$1</span>', $html);
+    }
+
+    private function keywords(array $task) {
+        return strtolower($task['title'] . ' ' . $task['summary'] . ' ' . implode(' ', $task['steps']) . ' ' . (isset($task['also']) ? $task['also'] : ''));
+    }
+
+    private function clock($seconds) {
+        $seconds = (int) round($seconds);
+        return sprintf('%d:%02d', intdiv($seconds, 60), $seconds % 60);
+    }
+
+    /**
+     * Narration cues from the caption file that ships with the plugin.
+     *
+     * @return array<int,array{at:float,text:string}>
+     */
+    private function cues($clip) {
+        $file = MEMBER_LIBRARY_PLUGIN_DIR . 'assets/features/library-content/guide/captions/' . $clip . '.vtt';
+        if (!is_readable($file)) {
+            return array();
+        }
+        $cues = array();
+        $blocks = preg_split('/\R\R+/', trim((string) file_get_contents($file)));
+        foreach ($blocks as $block) {
+            $lines = preg_split('/\R/', trim($block));
+            foreach ($lines as $i => $line) {
+                if (preg_match('/^(\d+):(\d{2}):(\d{2}(?:\.\d+)?) -->/', $line, $m)) {
+                    $text = trim(implode(' ', array_slice($lines, $i + 1)));
+                    if ('' !== $text) {
+                        $cues[] = array('at' => $m[1] * 3600 + $m[2] * 60 + (float) $m[3], 'text' => $text);
+                    }
+                    break;
+                }
+            }
+        }
+        return $cues;
+    }
+
+    /**
+     * Walkthrough videos live in the Media Library (they are too large to ship
+     * in the plugin ZIP). Each is tagged with VIDEO_META = its clip slug.
+     *
+     * @return array<string,string> clip slug => video URL
+     */
+    private function videos() {
+        $ids = get_posts(array(
+            'post_type'      => 'attachment',
+            'post_status'    => 'inherit',
+            'posts_per_page' => 50,
+            'fields'         => 'ids',
+            'meta_key'       => self::VIDEO_META,
+            'no_found_rows'  => true,
+        ));
+        $videos = array();
+        foreach ($ids as $id) {
+            $clip = (string) get_post_meta($id, self::VIDEO_META, true);
+            $url = wp_get_attachment_url($id);
+            if ('' !== $clip && $url) {
+                $videos[$clip] = $url;
+            }
+        }
+        /** Filter: override or supply guide video URLs, keyed by clip slug. */
+        return (array) apply_filters('member_library_guide_videos', $videos);
+    }
+
+    /**
+     * WP-CLI: wp member-library guide-videos import <folder> [--force]
+     * Copies NN-*.mp4 walkthroughs from <folder> into the Media Library and
+     * tags them for the guide. Re-running skips clips already installed.
+     */
+    public static function cli_import_videos($args, $assoc_args) {
+        $dir = isset($args[0]) ? rtrim($args[0], '/') : '';
+        if ('' === $dir || !is_dir($dir)) {
+            WP_CLI::error('Pass the folder holding the narrated NN-*.mp4 files.');
+        }
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $guide = new self();
+        $known = array();
+        foreach ($guide->sections('') as $section) {
+            foreach (isset($section['recipes']) ? $section['recipes'] : array() as $recipe) {
+                $known[$recipe['clip']] = $recipe['title'];
+            }
+        }
+        $installed = $guide->videos();
+        $force = !empty($assoc_args['force']);
+        $added = 0;
+        foreach ($known as $clip => $title) {
+            $source = $dir . '/' . $clip . '.mp4';
+            if (!is_readable($source)) {
+                WP_CLI::warning("Missing {$clip}.mp4 in {$dir}; skipped.");
+                continue;
+            }
+            if (isset($installed[$clip]) && !$force) {
+                WP_CLI::log("{$clip}: already installed.");
+                continue;
+            }
+            $tmp = wp_tempnam($clip . '.mp4');
+            copy($source, $tmp);
+            $id = media_handle_sideload(
+                array('name' => 'library-guide-' . $clip . '.mp4', 'tmp_name' => $tmp),
+                0,
+                sprintf('Library guide: %s', $title)
+            );
+            if (is_wp_error($id)) {
+                @unlink($tmp);
+                WP_CLI::warning("{$clip}: " . $id->get_error_message());
+                continue;
+            }
+            if ($force) {
+                foreach (get_posts(array('post_type' => 'attachment', 'post_status' => 'inherit', 'fields' => 'ids', 'meta_key' => self::VIDEO_META, 'meta_value' => $clip, 'exclude' => array($id))) as $old) {
+                    delete_post_meta($old, self::VIDEO_META);
+                }
+            }
+            update_post_meta($id, self::VIDEO_META, $clip);
+            $added++;
+            WP_CLI::log("{$clip}: installed as attachment {$id}.");
+        }
+        WP_CLI::success("{$added} guide video(s) installed.");
     }
 
     /**
@@ -181,10 +516,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                 'title' => __('How the Library works', 'member-library'),
                 'intro' => __('Four moving parts work together. You spend almost all of your time in the first one.', 'member-library'),
                 'model' => array(
-                    array('name' => __('WordPress (here)', 'member-library'), 'role' => __('Where you add and organise content, and set who is allowed in.', 'member-library')),
-                    array('name' => __('MemberPress', 'member-library'), 'role' => __('The lock. Its rules decide which memberships unlock which content.', 'member-library')),
-                    array('name' => __('Catalogue feed', 'member-library'), 'role' => __('The conveyor belt. It carries your changes over to the app automatically.', 'member-library')),
-                    array('name' => $app_name, 'role' => __('The storefront members actually see and watch in.', 'member-library')),
+                    array('name' => __('WordPress (here)', 'member-library'), 'role' => __('Where you add and organise content, and set who is allowed in.', 'member-library'), 'icon' => 'dashicons-wordpress'),
+                    array('name' => __('MemberPress', 'member-library'), 'role' => __('The lock. Its rules decide which memberships unlock which content.', 'member-library'), 'icon' => 'dashicons-lock'),
+                    array('name' => __('Catalogue feed', 'member-library'), 'role' => __('The conveyor belt. It carries your changes over to the app automatically.', 'member-library'), 'icon' => 'dashicons-update'),
+                    array('name' => $app_name, 'role' => __('The storefront members actually see and watch in.', 'member-library'), 'icon' => 'dashicons-smartphone'),
                 ),
                 'items' => array(
                     array(
@@ -206,7 +541,7 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             array(
                 'id'    => 'everyday-tasks',
                 'title' => __('Everyday tasks', 'member-library'),
-                'intro' => __('Click any task to expand its steps.', 'member-library'),
+                'intro' => __('Pick a task to watch its walkthrough and follow the steps. Each video is one to two minutes long.', 'member-library'),
                 'recipes' => array(
                     array(
                         'title' => __('Add a new course', 'member-library'),
@@ -221,6 +556,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('A brand-new course that no Access Group or MemberPress rule covers is open to every signed-in member. Set access before publishing, not after.', 'member-library'),
                         'screencast' => 'docs/screencasts/01-add-a-course.md',
+                        'clip' => '01-add-a-course',
+                        'also' => 'create new course lesson lessons module modules curriculum section build',
+                        'seconds' => 129,
+                        'summary' => __('Create a course, build its sections and lessons, and publish it.', 'member-library'),
                     ),
                     array(
                         'title' => __('Add episodes to a series', 'member-library'),
@@ -233,6 +572,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('A series inherits its access from the series itself. Episodes do not each need their own rule.', 'member-library'),
                         'screencast' => 'docs/screencasts/02-add-series-episodes.md',
+                        'clip' => '02-add-series-episodes',
+                        'also' => 'episode new episode member call calls live event recording podcast',
+                        'seconds' => 67,
+                        'summary' => __('Add a new episode to an ongoing series such as member calls.', 'member-library'),
                     ),
                     array(
                         'title' => __('Add a single video or resource', 'member-library'),
@@ -243,6 +586,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                             __('Check the “Library access” box, then Publish.', 'member-library'),
                         ),
                         'screencast' => 'docs/screencasts/03-add-single-content.md',
+                        'clip' => '03-add-single-content',
+                        'also' => 'upload video pdf worksheet slides download downloads resource file one-off standalone',
+                        'seconds' => 61,
+                        'summary' => __('Publish a one-off video or downloadable resource.', 'member-library'),
                     ),
                     array(
                         'title' => __('Change who can access something', 'member-library'),
@@ -256,6 +603,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('If the “Library access” box says “No MemberPress rule applies”, the content is open to every signed-in member. That is almost never what you want for paid content.', 'member-library'),
                         'screencast' => 'docs/screencasts/04-change-access.md',
+                        'clip' => '04-change-access',
+                        'also' => 'permission permissions members only paid paywall restrict restricted lock locked protect membership memberships unlock give access remove access',
+                        'seconds' => 82,
+                        'summary' => __('Choose which memberships unlock a piece of content.', 'member-library'),
                     ),
                     array(
                         'title' => __('Check who can access something', 'member-library'),
@@ -265,6 +616,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                             __('The Access column on the Courses, Series, and Content lists shows protected vs open at a glance.', 'member-library'),
                         ),
                         'screencast' => 'docs/screencasts/05-check-access.md',
+                        'clip' => '05-check-access',
+                        'also' => 'who can see who can open protected open permissions audit visible public free',
+                        'seconds' => 40,
+                        'summary' => __('See at a glance who can open something today.', 'member-library'),
                     ),
                     array(
                         'title' => __('Feature content on the Library homepage', 'member-library'),
@@ -276,6 +631,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('Featuring changes where something appears, not who can open it. Access still comes from its Access Group.', 'member-library'),
                         'screencast' => 'docs/screencasts/06-feature-homepage.md',
+                        'clip' => '06-feature-homepage',
+                        'also' => 'feature featured highlight homepage home page row rows carousel reorder order promote',
+                        'seconds' => 33,
+                        'summary' => __('Put content in a homepage row and set its order.', 'member-library'),
                     ),
                     array(
                         'title' => __('Post an announcement to members', 'member-library'),
@@ -288,6 +647,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('Once sending is switched on, delivery will reach real members. Always preview the audience in the Review box first.', 'member-library'),
                         'screencast' => 'docs/screencasts/07-post-announcement.md',
+                        'clip' => '07-post-announcement',
+                        'also' => 'announce announcement notify notification email push message news broadcast',
+                        'seconds' => 71,
+                        'summary' => __('Draft a message for members and preview who would get it.', 'member-library'),
                     ),
                     array(
                         'title' => __('Organise with Collections and Topics', 'member-library'),
@@ -297,6 +660,10 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                             __('Assign both from the edit screen of any course, series, or content item.', 'member-library'),
                         ),
                         'screencast' => 'docs/screencasts/08-collections-topics.md',
+                        'clip' => '08-collections-topics',
+                        'also' => 'category categories tag tags shelf shelves organize organise sort group',
+                        'seconds' => 37,
+                        'summary' => __('File content onto shelves and tag it by topic.', 'member-library'),
                     ),
                     array(
                         'title' => __('Schedule or unpublish content', 'member-library'),
@@ -306,11 +673,16 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
                         ),
                         'tip' => __('Deleting is permanent. Prefer Draft if you may want the content back.', 'member-library'),
                         'screencast' => 'docs/screencasts/09-schedule-unpublish.md',
+                        'clip' => '09-schedule-unpublish',
+                        'also' => 'expire expiry expiration end date schedule scheduled publish later future hide take down remove unpublish draft delete',
+                        'seconds' => 42,
+                        'summary' => __('Go live later, or take something down without deleting it.', 'member-library'),
                     ),
                 ),
             ),
             array(
                 'id'    => 'make-it-show',
+                'icon'  => 'dashicons-yes-alt',
                 'title' => __('Make sure it shows in the app', 'member-library'),
                 'intro' => sprintf(__('Your changes travel to %s on their own. This page confirms the pipe is flowing.', 'member-library'), $app_name),
                 'items' => array(
@@ -333,6 +705,7 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             ),
             array(
                 'id'    => 'troubleshooting',
+                'icon'  => 'dashicons-sos',
                 'title' => __('Troubleshooting', 'member-library'),
                 'items' => array(
                     array(
@@ -369,6 +742,7 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             ),
             array(
                 'id'    => 'updating',
+                'icon'  => 'dashicons-update-alt',
                 'title' => __('Updating the plugin', 'member-library'),
                 'items' => array(
                     array(
@@ -385,7 +759,7 @@ class MemberLibrary_Guide_Admin implements MemberLibrary_Feature {
             array(
                 'id'    => 'screencasts',
                 'title' => __('Video walkthroughs', 'member-library'),
-                'intro' => __('Each everyday task above has a matching screencast script in the plugin’s docs/screencasts folder, so the recorded videos and these written steps always cover the same tasks.', 'member-library'),
+                'intro' => __('Every video is recorded from the real Library screens and narrated from the same script as the written steps, so the two always match. Captions are on by default; use the CC button in the player to turn them off.', 'member-library'),
             ),
         );
     }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.0 - 2026-11-03
+
+- Guide & Help redesign: a light header with search and quick links, a
+  video "theatre" (player beside a chapter list with watched progress), a
+  title-card poster and play button for each walkthrough, an end card with
+  Watch again and Up next, numbered steps with a seekable transcript, and a
+  restyled "How the Library works" and help-answers layout. The accent
+  follows the user's wp-admin colour scheme, and the layout adapts down to
+  390px.
+- Nine narrated walkthrough videos with captions (`guide/captions/`) and
+  posters (`guide/posters/`). The MP4s are media-library attachments and are
+  uploaded to each site separately; until a video is present, its walkthrough
+  shows the poster and a notice.
+
 ## 0.15.0 - 2026-11-02
 
 - New in-plugin help screen at **Library → Guide & Help** (capability

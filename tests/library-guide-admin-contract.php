@@ -35,14 +35,27 @@ if (!empty($admin_ids)) {
     foreach (array('how-it-works', 'everyday-tasks', 'make-it-show', 'troubleshooting', 'updating', 'screencasts') as $section) {
         $assert(false !== strpos($html, 'id="' . $section . '"'), 'The guide has no ' . $section . ' section.');
     }
-    $assert(9 === substr_count($html, '<details class="tsol-guide-recipe">'), 'The guide does not list the nine everyday recipes.');
+    $assert(9 === substr_count($html, '<article id="task-'), 'The guide does not render the nine everyday task walkthroughs.');
+    $assert(9 === substr_count($html, 'class="tsol-guide-playlist__item"'), 'The playlist does not list the nine walkthroughs.');
 
-    // 3. Each recipe's screencast script ships with the plugin.
-    preg_match_all('#Screencast script: (docs/screencasts/[0-9a-z\-]+\.md)#', $html, $scripts);
-    $assert(9 === count($scripts[1]), 'Not every recipe names its screencast script.');
-    foreach ($scripts[1] as $script) {
+    // 3. Each task's screencast script, captions, and poster ship with the plugin.
+    preg_match_all('#data-guide-task="([0-9a-z\-]+)" data-script="(docs/screencasts/[0-9a-z\-]+\.md)"#', $html, $tasks);
+    $assert(9 === count($tasks[2]), 'Not every task names its screencast script.');
+    foreach ($tasks[2] as $i => $script) {
+        $clip = $tasks[1][$i];
         $assert(is_readable(MEMBER_LIBRARY_PLUGIN_DIR . $script), 'The guide names a missing screencast script: ' . $script);
+        $assert(false !== strpos($script, $clip), 'Task ' . $clip . ' points at another clip\'s script.');
+        foreach (array('captions/' . $clip . '.vtt', 'posters/' . $clip . '.jpg') as $asset) {
+            $assert(is_readable(MEMBER_LIBRARY_PLUGIN_DIR . 'assets/features/library-content/guide/' . $asset), 'Missing guide asset: ' . $asset);
+        }
+        $assert(false !== strpos($html, 'id="panel-script-' . $clip . '"'), 'Task ' . $clip . ' has no narration transcript.');
     }
+
+    // Every task shows either a captioned video or the written-steps fallback.
+    $videos = substr_count($html, '<video class="tsol-guide-video"');
+    $missing = substr_count($html, 'tsol-guide-video--missing');
+    $assert(9 === $videos + $missing, 'A task renders neither its video nor the fallback.');
+    $assert($videos === substr_count($html, '<track kind="captions"'), 'A guide video has no captions track.');
 
     // 4. The guide never promises actions the screens do not offer: announcements
     // are draft-only, and homepage rows are ordered with arrows, not dragging.
